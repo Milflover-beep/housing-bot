@@ -253,6 +253,16 @@ module.exports = function coreCommands(ctx) {
       embed.setDescription(`⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}`);
     }
 
+    let hypixelLevelField;
+    if (!hypixelResult.ok) {
+      hypixelLevelField = '— *(not verified — see notes)*';
+    } else if (!hypixelResult.hasPlayer) {
+      hypixelLevelField = '— *(no Hypixel profile)*';
+    } else {
+      hypixelLevelField = `**${hypixelResult.level.toFixed(2)}**`;
+    }
+    embed.addFields({ name: 'Hypixel network level', value: hypixelLevelField, inline: false });
+
     const headUrl = minecraftHeadUrl(ign);
     if (headUrl) embed.setThumbnail(headUrl);
 
