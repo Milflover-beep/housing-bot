@@ -1,11 +1,50 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
+const RANK_LABEL = { prime: 'Prime', elite: 'Elite', apex: 'Apex' };
 
 module.exports = function applicationsCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn, applicantRoleName, applicantRoleIds } = ctx;
+  const {
+    pool,
+    requireLevel,
+    defer,
+    normalizeIgn,
+    applicantRoleName,
+    applicantRoleIds,
+    roleIds,
+    parseRoleIdList,
+    resolveGuildMember,
+  } = ctx;
   const mgr = PermissionFlagsBits.ManageRoles;
+
+  /** Remove configured applicant role(s) from a guild member (same logic as /deny). */
+  async function removeApplicantRole(guild, member) {
+    const ids = applicantRoleIds();
+    if (ids.length > 0) {
+      for (const rid of ids) {
+        let role = guild.roles.cache.get(rid);
+        if (!role) role = await guild.roles.fetch(rid).catch(() => null);
+        if (role && member.roles.cache.has(role.id)) {
+          await member.roles.remove(role);
+        }
+      }
+    } else {
+      const name = applicantRoleName();
+      const role = guild.roles.cache.find((r) => r.name === name);
+      if (role && member.roles.cache.has(role.id)) {
+        await member.roles.remove(role);
+      }
+    }
+  }
+
+  /** Role to ping on /accept: ACCEPT_PING_ROLE_ID else first BOT_ROLE_MANAGER_ID. */
+  function acceptPingRoleId() {
+    const fromEnv = parseRoleIdList('ACCEPT_PING_ROLE_ID');
+    if (fromEnv.length > 0) return fromEnv[0];
+    const mgrIds = roleIds('manager');
+    return mgrIds[0] ?? null;
+  }
 
   async function handleClearcooldown(interaction) {
     await defer(interaction, false);
@@ -28,7 +67,8 @@ module.exports = function applicationsCommands(ctx) {
 
   async function handleDeny(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
+    const staff = await resolveGuildMember(interaction);
+    if (!requireLevel(staff, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
     if (!interaction.guild) {
@@ -54,22 +94,7 @@ module.exports = function applicationsCommands(ctx) {
 
     try {
       const member = await interaction.guild.members.fetch(discordUser.id);
-      const ids = applicantRoleIds();
-      if (ids.length > 0) {
-        for (const rid of ids) {
-          let role = interaction.guild.roles.cache.get(rid);
-          if (!role) role = await interaction.guild.roles.fetch(rid).catch(() => null);
-          if (role && member.roles.cache.has(role.id)) {
-            await member.roles.remove(role);
-          }
-        }
-      } else {
-        const name = applicantRoleName();
-        const role = interaction.guild.roles.cache.find((r) => r.name === name);
-        if (role && member.roles.cache.has(role.id)) {
-          await member.roles.remove(role);
-        }
-      }
+      await removeApplicantRole(interaction.guild, member);
     } catch (e) {
       console.warn('deny: applicant role:', e.message);
     }
@@ -80,6 +105,77 @@ module.exports = function applicationsCommands(ctx) {
         `Cooldown until <t:${Math.floor(cooldownUntil.getTime() / 1000)}:F> (${weeks} week${
           weeks > 1 ? 's' : ''
         }).`,
+    });
+  }
+
+  async function handleAccept(interaction) {
+    await defer(interaction, false);
+    const staff = await resolveGuildMember(interaction);
+    if (!requireLevel(staff, 2)) {
+      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    }
+    if (!interaction.guild) {
+      return interaction.editReply({ content: '❌ Use this command in a server.' });
+    }
+    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const discordUser = interaction.options.getUser('discord', true);
+    const typeStr = interaction.options.getString('type');
+    const winFraction = interaction.options.getString('win-fraction');
+
+    try {
+      const member = await interaction.guild.members.fetch(discordUser.id);
+      await removeApplicantRole(interaction.guild, member);
+    } catch (e) {
+      console.warn('accept: applicant role:', e.message);
+    }
+
+    try {
+      await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [discordUser.id]);
+    } catch (e) {
+      if (e && e.code !== '42P01') throw e;
+    }
+
+    const notifyChannelId = parseRoleIdList('ACCEPT_NOTIFY_CHANNEL_ID')[0];
+    const pingRoleId = acceptPingRoleId();
+    const rankLabel = RANK_LABEL[typeStr] || typeStr;
+    const winPart = winFraction && String(winFraction).trim() ? ` ${String(winFraction).trim()}` : '';
+
+    if (notifyChannelId && pingRoleId) {
+      try {
+        const channel = await interaction.client.channels.fetch(notifyChannelId);
+        if (channel?.isTextBased?.()) {
+          const pingMention = `<@&${pingRoleId}>`;
+          const bodyLine = `**${ign}** <@${discordUser.id}> needs **${rankLabel}**!${winPart}`;
+          const embed = new EmbedBuilder()
+            .setTitle('Rank Request')
+            .setDescription(`${bodyLine} ${pingMention}`)
+            .setColor(0xffc107)
+            .addFields(
+              { name: 'Player IGN', value: ign, inline: true },
+              { name: 'Discord User', value: `<@${discordUser.id}>`, inline: true },
+              { name: 'Rank Type', value: typeStr, inline: true }
+            )
+            .setTimestamp();
+          if (winFraction && String(winFraction).trim()) {
+            embed.addFields({ name: 'Win fraction', value: String(winFraction).trim(), inline: true });
+          }
+          await channel.send({ content: pingMention, embeds: [embed] });
+        }
+      } catch (e) {
+        console.warn('accept: notify channel:', e?.message || e);
+      }
+    }
+
+    let note = '';
+    if (!notifyChannelId) {
+      note = '\n\n⚠️ Set **ACCEPT_NOTIFY_CHANNEL_ID** in the bot environment to post rank-request embeds.';
+    } else if (!pingRoleId) {
+      note =
+        '\n\n⚠️ Set **ACCEPT_PING_ROLE_ID** or **BOT_ROLE_MANAGER_ID** so /accept can ping managers.';
+    }
+
+    await interaction.editReply({
+      content: `✅ Accepted **${ign}** (<@${discordUser.id}>) for **${typeStr}** tryout. Applicant role removed.${note}`,
     });
   }
 
@@ -109,7 +205,27 @@ module.exports = function applicationsCommands(ctx) {
             )
         )
         .setDefaultMemberPermissions(mgr),
+      new SlashCommandBuilder()
+        .setName('accept')
+        .setDescription('Accept an applicant: remove applicant role and notify managers')
+        .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
+        .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
+        .addStringOption((o) =>
+          o
+            .setName('type')
+            .setDescription('Rank ladder they are applying for')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Prime', value: 'prime' },
+              { name: 'Elite', value: 'elite' },
+              { name: 'Apex', value: 'apex' }
+            )
+        )
+        .addStringOption((o) =>
+          o.setName('win-fraction').setDescription('Optional, e.g. 14/20').setRequired(false)
+        )
+        .setDefaultMemberPermissions(mgr),
     ],
-    handlers: { clearcooldown: handleClearcooldown, deny: handleDeny },
+    handlers: { clearcooldown: handleClearcooldown, deny: handleDeny, accept: handleAccept },
   };
 };

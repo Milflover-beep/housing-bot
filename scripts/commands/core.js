@@ -529,6 +529,7 @@ module.exports = function coreCommands(ctx) {
       add('Staff+', [
         '`/check`',
         '`/deny`',
+        '`/accept`',
         '`/score`',
         '`/blacklist`',
         '`/log` (→ manager queue)',
