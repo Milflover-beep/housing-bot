@@ -60,7 +60,7 @@ module.exports = function pmCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const ping = interaction.options.getInteger('ping');
     const uuid = interaction.options.getString('uuid');
     const mgrType = parseManagerType(interaction.options.getString('manager-type'));

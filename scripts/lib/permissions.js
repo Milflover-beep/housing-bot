@@ -5,7 +5,7 @@
  *
  * **Recommended:** set role **IDs** (comma-separated for main + test servers):
  *   BOT_ROLE_PM_ID=id1,id2 BOT_ROLE_STAFF_ID=... etc.
- * Optional: BOT_ROLE_BOOSTER_ID, BOT_ROLE_APPLICANT_ID (/deny)
+ * Optional: BOT_ROLE_BOOSTER_ID, BOT_ROLE_APPLICANT_ID (/check grants, /deny removes)
  *
  * If any ID is set for a tier, **any** of those roles grants that level (name is ignored).
  * If no IDs for that tier, falls back to **exact role name** (BOT_ROLE_*_NAME).

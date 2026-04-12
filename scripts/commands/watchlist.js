@@ -8,7 +8,7 @@ module.exports = function watchlistCommands(ctx) {
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const reason = interaction.options.getString('reason');
     const threat = interaction.options.getString('threat-level');
     await pool.query(

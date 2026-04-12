@@ -1,4 +1,41 @@
 /**
+ * One cooldown row per Discord user (any rank denial blocks all ladders until expiry).
+ */
+async function ensureApplicationDenials(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS application_denials (
+      id               SERIAL PRIMARY KEY,
+      discord_id       TEXT NOT NULL,
+      ign              TEXT NOT NULL,
+      rank_type        TEXT,
+      cooldown_until   TIMESTAMPTZ NOT NULL,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await client.query(`ALTER TABLE application_denials DROP CONSTRAINT IF EXISTS application_denials_discord_id_rank_type_key`);
+  await client.query(`ALTER TABLE application_denials DROP CONSTRAINT IF EXISTS application_denials_rank_type_check`);
+  await client.query(`
+    ALTER TABLE application_denials ADD CONSTRAINT application_denials_rank_type_check
+    CHECK (rank_type IS NULL OR rank_type IN ('P', 'E', 'A'))
+  `).catch(() => {});
+  await client.query(`ALTER TABLE application_denials ALTER COLUMN rank_type DROP NOT NULL`).catch(() => {});
+  await client.query(`
+    DELETE FROM application_denials
+    WHERE id NOT IN (
+      SELECT id FROM (
+        SELECT DISTINCT ON (discord_id) id
+        FROM application_denials
+        ORDER BY discord_id, cooldown_until DESC
+      ) sub
+    )
+  `).catch(() => {});
+  await client.query(`DROP INDEX IF EXISTS application_denials_discord_id_uidx`);
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS application_denials_discord_id_uidx ON application_denials (discord_id)
+  `).catch(() => {});
+}
+
+/**
  * Applies lightweight schema fixes for existing databases (e.g. after pulling new code).
  * Safe to run repeatedly.
  */
@@ -20,6 +57,15 @@ async function ensureDatabaseSchema(pool) {
         status             TEXT,
         punishment_status  TEXT
       )
+    `);
+    await client.query(`
+      ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS cooldown_raw TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS reversal_remind_at TIMESTAMPTZ;
+    `);
+    await client.query(`
+      ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS reversal_reminded BOOLEAN DEFAULT FALSE;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS punishment_queue (
@@ -53,17 +99,8 @@ async function ensureDatabaseSchema(pool) {
       ALTER TABLE pm_list ADD CONSTRAINT pm_list_manager_type_check
       CHECK (manager_type IS NULL OR manager_type IN ('P', 'E', 'A'))
     `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS application_denials (
-        id               SERIAL PRIMARY KEY,
-        discord_id       TEXT NOT NULL,
-        ign              TEXT NOT NULL,
-        rank_type        TEXT NOT NULL CHECK (rank_type IN ('P', 'E', 'A')),
-        cooldown_until   TIMESTAMPTZ NOT NULL,
-        created_at       TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE (discord_id, rank_type)
-      )
-    `);
+    await ensureApplicationDenials(client);
+
     console.log('✅ Database schema OK (punishment_logs/queue, pm_list, application_denials)');
   } finally {
     client.release();

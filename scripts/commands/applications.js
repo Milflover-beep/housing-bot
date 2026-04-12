@@ -4,8 +4,27 @@ const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
 
 module.exports = function applicationsCommands(ctx) {
-  const { pool, requireLevel, defer, applicantRoleName, applicantRoleIds } = ctx;
+  const { pool, requireLevel, defer, normalizeIgn, applicantRoleName, applicantRoleIds } = ctx;
   const mgr = PermissionFlagsBits.ManageRoles;
+
+  async function handleClearcooldown(interaction) {
+    await defer(interaction, false);
+    if (!requireLevel(interaction.member, 2)) {
+      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    }
+    const discordUser = interaction.options.getUser('discord', true);
+    const r = await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [
+      discordUser.id,
+    ]);
+    if (r.rowCount === 0) {
+      return interaction.editReply({
+        content: `No active application cooldown row for <@${discordUser.id}>.`,
+      });
+    }
+    await interaction.editReply({
+      content: `✅ Cleared application tryout cooldown for <@${discordUser.id}>.`,
+    });
+  }
 
   async function handleDeny(interaction) {
     await defer(interaction, false);
@@ -15,7 +34,7 @@ module.exports = function applicationsCommands(ctx) {
     if (!interaction.guild) {
       return interaction.editReply({ content: '❌ Use this command in a server.' });
     }
-    const ign = interaction.options.getString('ign').trim();
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
     const letter = RANK_LETTER[typeStr];
@@ -25,8 +44,9 @@ module.exports = function applicationsCommands(ctx) {
     await pool.query(
       `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (discord_id, rank_type) DO UPDATE SET
+       ON CONFLICT (discord_id) DO UPDATE SET
          ign = EXCLUDED.ign,
+         rank_type = EXCLUDED.rank_type,
          cooldown_until = EXCLUDED.cooldown_until,
          created_at = NOW()`,
       [discordUser.id, ign, letter, cooldownUntil]
@@ -66,6 +86,13 @@ module.exports = function applicationsCommands(ctx) {
   return {
     commands: [
       new SlashCommandBuilder()
+        .setName('clearcooldown')
+        .setDescription('Remove application tryout cooldown (undo a mistaken /deny)')
+        .addUserOption((o) =>
+          o.setName('discord').setDescription('Discord user').setRequired(true)
+        )
+        .setDefaultMemberPermissions(mgr),
+      new SlashCommandBuilder()
         .setName('deny')
         .setDescription('Deny an application: remove applicant role and set tryout cooldown')
         .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
@@ -83,6 +110,6 @@ module.exports = function applicationsCommands(ctx) {
         )
         .setDefaultMemberPermissions(mgr),
     ],
-    handlers: { deny: handleDeny },
+    handlers: { clearcooldown: handleClearcooldown, deny: handleDeny },
   };
 };

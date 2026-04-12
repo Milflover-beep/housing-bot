@@ -1,0 +1,5 @@
+# Railway: config in repo overrides dashboard. See docs/DEPLOY.md
+# https://docs.railway.app/deploy/config-as-code
+
+[deploy]
+startCommand = "npm start"

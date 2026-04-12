@@ -9,8 +9,8 @@ module.exports = function altsCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const orig = interaction.options.getString('original-ign');
-    const alt = interaction.options.getString('alt-ign');
+    const orig = normalizeIgn(interaction.options.getString('original-ign'));
+    const alt = normalizeIgn(interaction.options.getString('alt-ign'));
     await pool.query(
       `INSERT INTO alts (original_ign, alt_ign, created_at, is_whitelisted) VALUES ($1, $2, NOW(), false)`,
       [orig, alt]
@@ -63,11 +63,11 @@ module.exports = function altsCommands(ctx) {
     let n = 1;
     if (newOrig) {
       sets.push(`original_ign = $${n++}`);
-      vals.push(newOrig);
+      vals.push(normalizeIgn(newOrig));
     }
     if (newAlt) {
       sets.push(`alt_ign = $${n++}`);
-      vals.push(newAlt);
+      vals.push(normalizeIgn(newAlt));
     }
     if (!sets.length) {
       return interaction.editReply({ content: '❌ Provide at least one field to change.' });
@@ -82,8 +82,7 @@ module.exports = function altsCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const raw = interaction.options.getString('ign').trim();
-    const ignLower = normalizeIgn(raw);
+    const ignLower = normalizeIgn(interaction.options.getString('ign'));
     const on = interaction.options.getBoolean('whitelisted');
     await pool.query('UPDATE alts SET is_whitelisted = $1 WHERE LOWER(original_ign) = $2', [
       on,
@@ -91,11 +90,11 @@ module.exports = function altsCommands(ctx) {
     ]);
     if (on) {
       await pool.query('INSERT INTO original_whitelist (original_ign, created_at) VALUES ($1, NOW())', [
-        raw,
+        ignLower,
       ]);
     }
     await interaction.editReply({
-      content: `✅ Set whitelist flag for alts with original **${raw}** to **${on}**.`,
+      content: `✅ Set whitelist flag for alts with original **${ignLower}** to **${on}**.`,
     });
   }
 

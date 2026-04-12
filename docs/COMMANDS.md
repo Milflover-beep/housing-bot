@@ -6,18 +6,19 @@ This document describes every slash command registered by `scripts/commands/` (b
 
 ## Access levels (bot role names)
 
-The bot maps power using roles whose **names** must match (override with `BOT_ROLE_*_NAME` in `.env`):
+The bot maps power using **role IDs** (recommended) or **exact role names** (fallback). See `scripts/lib/permissions.js`.
 
-| Level | Default role name        | Env override example      |
-|-------|--------------------------|---------------------------|
-| 1 PM  | `[PM BOT ACCESS]`        | `BOT_ROLE_PM_NAME`        |
-| 2 Staff | `[STAFF BOT ACCESS]`   | `BOT_ROLE_STAFF_NAME`     |
-| 3 Manager | `[MANAGER BOT ACCESS]` | `BOT_ROLE_MANAGER_NAME` |
-| 4 Admin | `[ADMIN BOT ACCESS]`   | `BOT_ROLE_ADMIN_NAME`     |
+| Level | Default role name (if no IDs) | Env for IDs (comma‑separated) |
+|-------|-------------------------------|--------------------------------|
+| 1 PM  | `[PM BOT ACCESS]`             | `BOT_ROLE_PM_ID`               |
+| 2 Staff | `[STAFF BOT ACCESS]`        | `BOT_ROLE_STAFF_ID`            |
+| 3 Manager | `[MANAGER BOT ACCESS]`    | `BOT_ROLE_MANAGER_ID`          |
+| 4 Admin | `[ADMIN BOT ACCESS]`        | `BOT_ROLE_ADMIN_ID`            |
 
-- **Owner**: user IDs in `BOT_OWNER_IDS` — treated as owner for owner-only commands.
+- **Name overrides** (when no IDs for that tier): `BOT_ROLE_PM_NAME`, `BOT_ROLE_STAFF_NAME`, etc.
+- **Owner**: `BOT_OWNER_IDS` — comma‑separated user IDs for owner-only commands.
 - **Booster+**: optional `BOT_ROLE_BOOSTER_NAME` for some read-only tier commands.
-- **`/deny` applicant role**: `BOT_ROLE_APPLICANT_NAME` (default `[APPLICANT]`) — must match the role name in Discord exactly.
+- **Applicant** (for `/deny`): `BOT_ROLE_APPLICANT_ID` (comma‑separated) or `BOT_ROLE_APPLICANT_NAME` (default `[APPLICANT]`).
 
 Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Admin+** = 4, **Owner** = `BOT_OWNER_IDS`.
 
@@ -27,8 +28,9 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 
 - **VS Code / Cursor**: Open this file → Print → **Save as PDF**.
 - **macOS Preview**: Open Markdown in an app that renders it, then Print → PDF.
-- **Pandoc** (if installed):  
-  `pandoc docs/COMMANDS.md -o housing-bot-commands.pdf`
+- **npm** (requires [Pandoc](https://pandoc.org/) on your PATH):  
+  `npm run docs:pdf` → writes `housing-bot-commands.pdf` in the repo root.
+- **CLI**: `pandoc docs/COMMANDS.md -o housing-bot-commands.pdf`
 
 ---
 
@@ -40,9 +42,9 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 - **Default permission**: Manage Roles (bot also requires **Staff+**).
 - **Options**:
   - `ign` (string, required) — Minecraft IGN.
-  - `discord` (string, required) — Discord user ID or mention (used for cooldown and context).
+  - `discord` (user, required) — linked Discord account (cooldown + applicant role).
   - `rank-type` (choice, required) — `Prime` | `Elite` | `Apex` (must match the ladder you’re checking).
-- **Behavior**: Queries blacklists, admin blacklists, timeouts, alts, existing `tier_results` for that ladder, and **application denial cooldown** (`application_denials` by Discord ID + ladder). Builds an embed: eligible / not eligible / eligible with notes.
+- **Behavior**: Queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, alts, “applying below current ladder”) can yield **eligible with warnings** (amber). Full pass (green) assigns the applicant role when configured.
 
 ### `/deny`
 
@@ -67,7 +69,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `final-score` (string, required) — e.g. `10-8`
   - `fight-number` (integer, required)
   - `fight-type` (choice, required) — Prime | Elite | Apex
-- **Behavior**: Inserts into `scores`. Reply includes **Fight ID** (`scores.id`) for `/updatescore` and `/voidscore`.
+- **Behavior**: Inserts into `scores` (`RETURNING *`). Reply embed matches the **fight log** format plus **Fight ID** for staff. Sends a **second message** (no ping) to the fight log channel: embed **Fight Score Logged** (green), winner head thumbnail via `https://minotar.net/helm/<winner>/64.png`, fields Winner / Loser / Score / Fight # / Fight Type / Date — see `scripts/lib/fightScoreLogEmbed.js`. Channel: `FIGHT_SCORE_LOG_CHANNEL_ID` (default in code if unset).
 
 ### `/fighthistory`
 
@@ -75,20 +77,29 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 - **Options**:
   - `ign` (string, required)
   - `page` (integer, optional, min 1)
+  - `debug` (boolean, optional) — staff: show DB fight IDs on rows
 - **Behavior**: Embed + **Previous / Next** buttons to change page.
 
 ### `/updatescore`
 
-- **Description**: Correct a miscored fight (Admin/owner only in code).
+- **Description**: Correct a miscored fight (admin or owner only).
 - **Default permission**: Administrator.
 - **Options**:
   - `id` (integer, required) — **Fight ID** from `/score` (`scores.id`).
   - `winner-ign`, `loser-ign`, `final-score` (optional) — at least one field required to update.
+- **Behavior**: Updates `scores`. Sends a **Fight Score Edited** embed to the same fight log channel (no ping); reply is a short confirmation only.
 
 ### `/voidscore`
 
-- **Description**: Mark a fight as voided (excluded from stats).
+- **Description**: Mark a fight as voided (`is_voided = true`) — excluded from stats; row **remains** in the DB.
 - **Default permission**: Manage Roles (**Staff+**).
+- **Options**:
+  - `id` (integer, required) — `scores.id`.
+
+### `/deletescore`
+
+- **Description**: **Permanently delete** a row from `scores` (admin or owner only).
+- **Default permission**: Administrator.
 - **Options**:
   - `id` (integer, required) — `scores.id`.
 
@@ -96,27 +107,32 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 
 ## Tier lists
 
+Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`, `A+`, `A`, `A-`, `B+`, `B`, `B-`, `C+`, `C`, `C-`, `D`, `N/A`.
+
 ### `/primerate` / `/eliterate` / `/apexrate`
 
 - **Description**: Submit a tier rating for Prime / Elite / Apex.
 - **Default permission**: Manage Roles (**Manager+**).
 - **Options**:
   - `ign` (string, required)
-  - `tier` (string, required) — must be a valid tier (`VALID_TIERS` in code).
+  - `tier` (string, required) — must match `VALID_TIERS`.
   - `discord` (user, required)
-- **Behavior**: Inserts into `tier_results` and `tier_history`.
+- **Behavior**: Deletes any existing `tier_results` row for the same `ign` + ladder, then inserts the new row; appends `tier_history`. Refreshes the **public tier list** message (see below).
 
 ### `/submit`
 
-- **Description**: Submit a tier result (same idea as rate commands, unified command).
+- **Description**: Submit a tier result (unified command; same data model as rate commands).
 - **Default permission**: Manage Roles (**Manager+**).
 - **Options**:
-  - `ign`, `tier`, `discord` (required)
+  - `ign` (required)
   - `type` (choice) — Prime (`P`) | Elite (`E`) | Apex (`A`)
+  - `tier` (choice, required) — **dropdown** of all `VALID_TIERS` (not free text).
+  - `discord` (user, required)
+- **Behavior**: Same replace‑then‑insert as above; refreshes public tier list.
 
 ### `/viewtier`
 
-- **Description**: View stored tier rows for an IGN.
+- **Description**: View current tier rows for an IGN (one row per ladder when duplicates were cleaned up).
 - **Permission**: PM+ or booster role (see `hasBoosterOrAbove`).
 - **Options**: `ign` (required)
 
@@ -127,7 +143,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 - **Options**:
   - `ign` (string, required)
   - `type` (choice, required) — Prime | Elite | Apex
-- **Behavior**: `DELETE FROM tier_results` where `LOWER(ign)` matches and `type` is P/E/A.
+- **Behavior**: `DELETE FROM tier_results` for that `ign` + P/E/A. Refreshes public tier list.
 
 ### `/tierids`
 
@@ -137,15 +153,22 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 
 ### `/tierlist`
 
-- **Description**: Show tier list for one fight type.
+- **Description**: Show tier list for one fight type (in the command reply).
 - **Permission**: Booster+ or PM+.
 - **Options**: `type` — Prime | Elite | Apex
 
+### Public tier list channel (auto + owner refresh)
+
+- **Channel**: `TIERLIST_PUBLIC_CHANNEL_ID` or `TIERLIST_CHANNEL_ID` (see **Environment variables**). Default channel id is set in `scripts/lib/tierListChannelSync.js` if unset.
+- **Layout**: **One message** with **three embeds**, top to bottom: **Apex** → **Elite** → **Prime**. Each embed uses bucketed **S / A / B / C / D** sections with `yaml` lists (see `buildTierListEmbedDescription`).
+- **Updates**: On `/submit`, `/primerate`, `/eliterate`, `/apexrate`, and `/removetier`, the bot **deletes** previously tracked message(s) in that channel and **posts a new message** (avoids Discord’s “(edited)” tag). Message id is stored in `tier_list_messages` (`position = 0`).
+- **Deduping**: Before insert, old `tier_results` row for the same normalized IGN + ladder is removed so each player appears once per ladder. Reads use `DISTINCT ON` where needed for legacy duplicate rows.
+
 ### `/publictierlistupdate`
 
-- **Description**: Update posted embeds for public tier lists (uses `tier_list_messages` + channel).
+- **Description**: Owner-only manual refresh of the public tier list message(s) in the configured channel (same delete + repost flow as above).
 - **Permission**: **Owner** only.
-- **Options**: `channel-id` (optional) — or use `TIERLIST_CHANNEL_ID` in `.env`.
+- **Options**: `channel-id` (optional) — overrides env default for that run.
 
 ---
 
@@ -210,8 +233,8 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 - **Default permission**: Manage Roles (**Staff+**).
 - **Options**:
   - `user-ign`, `details` (required)
-  - `evidence` (optional)
-  - `punishment` (optional)
+  - `evidence` (optional) — if provided, must include at least one `http://` or `https://` link (shown as links in `/checkqueue`).
+  - `cooldown` (optional) — one unit after manager accept: `d` days, `h` hours, `m` minutes (e.g. `1d`, `12h`, `1m`). Used to schedule the **unban reminder** ping when the period ends (not on accept).
 
 ### `/history`
 
@@ -221,7 +244,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 
 ### `/getproof`
 
-- **Description**: Full punishment details for an IGN (manager review).
+- **Description**: Full punishment details and evidence for an IGN.
 - **Default permission**: Manage Roles (**Manager+**).
 - **Options**: `ign` (required)
 
@@ -232,18 +255,24 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 
 ### `/boosterpuncheck`
 
-- **Description**: List active finalized punishments.
+- **Description**: List active manager-approved punishments.
 - **Default permission**: Manage Roles (**Staff+**).
 
 ### `/checkqueue`
 
-- **Description**: Manager review of `/log` queue (subcommands).
+- **Description**: Manager review of pending `/log` items: **paged** embed (Previous / Next) with **Accept** / **Deny** buttons. Ephemeral to the invoker.
 - **Default permission**: Manage Roles (**Manager+**).
-- **Subcommands**:
-  - `list` — pending `punishment_queue` rows
-  - `proof` — `queue-id` (integer, required)
-  - `accept` — `queue-id` (required)
-  - `deny` — `queue-id` (required) — *note: different from top-level `/deny` (applications).*
+- **Behavior**: **Accept** sets `punishment_logs` active and schedules `reversal_remind_at` from `cooldown_raw` if set. **Deny** voids the log. No channel ping on accept.
+
+### `/removepunishment`
+
+- **Description**: Delete a punishment log by id (and linked queue row).
+- **Default permission**: Manage Roles (**Manager+**).
+- **Options**: `id` (integer) — id shown in `/history`.
+
+### Cooldown expiry pings (background)
+
+- **Poller** (`scripts/lib/punishmentExpiryPoller.js`): when `reversal_remind_at` passes, posts **Punishment expired** to the pings channel (embed with details, no evidence). Configure **`PUNISHMENT_PINGS_CHANNEL_ID`** or **`PINGS_CHANNEL_ID`**. Role: **`PUNISHMENT_STAFF_ROLE_ID`** or **`STAFF_PING_ROLE_ID`**. Rows are claimed atomically; deleted logs do not ping.
 
 ---
 
@@ -445,22 +474,29 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 |----------|---------|
 | `BOT_TOKEN` | Discord bot token |
 | `DATABASE_URL` | Postgres connection string |
+| `DATABASE_SSL` | Optional: `true` / `false` for pool TLS (see `scripts/lib/pool.js`) |
 | `GUILD_ID` | If set, guild-scoped slash commands (instant update) |
 | `CLEAR_GLOBAL_COMMANDS` | When using `GUILD_ID`, clear global commands unless `false` |
-| `BOT_OWNER_IDS` | Comma-separated user IDs |
-| `BOT_ROLE_*_NAME` | Override PM/staff/manager/admin role **display names** |
+| `BOT_OWNER_IDS` | Comma-separated user IDs (owner-only commands) |
+| `BOT_ROLE_PM_ID`, `BOT_ROLE_STAFF_ID`, `BOT_ROLE_MANAGER_ID`, `BOT_ROLE_ADMIN_ID` | Comma-separated role snowflakes per tier (recommended) |
+| `BOT_ROLE_APPLICANT_ID` | Applicant role id(s) for `/deny` |
+| `BOT_ROLE_*_NAME` | Override role **names** when no IDs set for that tier |
 | `BOT_ROLE_BOOSTER_NAME` | Optional booster role for `/tierlist` / `/viewtier` |
-| `BOT_ROLE_APPLICANT_NAME` | Applicant role removed by `/deny` |
 | `ENABLE_GUILD_MEMBERS_INTENT` | `true` if using privileged member fetch |
-| `TIERLIST_CHANNEL_ID` | Default channel for `/publictierlistupdate` |
+| `FIGHT_SCORE_LOG_CHANNEL_ID` | Channel for **Fight Score Logged** / **Fight Score Edited** embeds from `/score` and `/updatescore` |
+| `TIERLIST_PUBLIC_CHANNEL_ID` | Public tier list channel (preferred); falls back to `TIERLIST_CHANNEL_ID` |
+| `TIERLIST_CHANNEL_ID` | Legacy fallback for tier list channel |
+| `PUNISHMENT_PINGS_CHANNEL_ID` or `PINGS_CHANNEL_ID` | Channel for **punishment cooldown ended** (unban reminder) pings |
+| `PUNISHMENT_STAFF_ROLE_ID` or `STAFF_PING_ROLE_ID` | Role to @mention on cooldown expiry |
 | `HELP_STAFF_ROLE_ID`, `HELP_CHANNEL_ID` | `/help` mentions |
+| `CHECK_LEVELBOT_MESSAGE`, `CHECK_LEVELBOT_WHEN` | Optional extra channel message after `/check` (`always` / `pass` / `fail`) |
 | `BOT_SHOW_ERRORS` | Include error detail in generic failure message |
 
 ---
 
 ## Command count
 
-**60+** distinct top-level slash commands (including subcommands: `watchlist add/remove`, `checkqueue list/proof/accept/deny`). Re-register commands after code changes (`node scripts/index.js` or your deploy process).
+**60+** distinct top-level slash commands (including subcommands such as `watchlist add/remove`). Re-register commands after code changes (`node scripts/index.js` or your deploy process).
 
 ---
 

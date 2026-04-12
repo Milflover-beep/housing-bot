@@ -9,7 +9,7 @@ module.exports = function blacklistCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const reason = interaction.options.getString('reason');
     const duration = interaction.options.getString('duration');
     const expires = parseDurationToDate(duration);

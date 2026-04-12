@@ -1,14 +1,14 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = function roleCommands(ctx) {
-  const { pool, isAdminOrOwner, defer } = ctx;
+  const { pool, isAdminOrOwner, defer, normalizeIgn } = ctx;
 
   async function handleRoleblacklist(interaction) {
     await defer(interaction, true);
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const roleType = interaction.options.getString('role-type');
     const reason = interaction.options.getString('reason');
     const user = interaction.options.getUser('user');

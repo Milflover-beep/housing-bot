@@ -2,11 +2,12 @@
   "name": "housing-bot",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "scripts/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node scripts/index.js",
     "seed": "node scripts/seed.js",
-    "db:reset": "node scripts/seed.js --reset"
+    "db:reset": "node scripts/seed.js --reset",
+    "docs:pdf": "pandoc docs/COMMANDS.md -o housing-bot-commands.pdf"
   }, 
   "repository": {
     "type": "git",

@@ -5,6 +5,7 @@ const VALID_TIERS = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D'
 
 const TIER_ORDER = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'N/A'];
 
+/** Minecraft IGNs are matched case-insensitively (trim + lowercase for DB keys). */
 function normalizeIgn(s) {
   return String(s || '').trim().toLowerCase();
 }
@@ -36,6 +37,37 @@ function parseDurationToDate(text) {
   if (u.startsWith('h')) return new Date(ms + n * 3600000);
   if (u.startsWith('m')) return new Date(ms + n * 60000);
   return undefined;
+}
+
+/** Single-unit cooldown for /log, e.g. `3d`, `12h`, `30m`. Returns ms, null if empty, undefined if invalid. */
+function parseCooldownToMs(text) {
+  const t = String(text || '').trim();
+  if (!t) return null;
+  const m = t.match(/^(\d+)\s*(d|h|m)$/i);
+  if (!m) return undefined;
+  const n = parseInt(m[1], 10);
+  if (n < 1) return undefined;
+  const u = m[2].toLowerCase();
+  if (u === 'd') return n * 86400000;
+  if (u === 'h') return n * 3600000;
+  if (u === 'm') return n * 60000;
+  return undefined;
+}
+
+/**
+ * Extract http(s) URLs as plain text (newline-separated).
+ * Use in embed **descriptions**: Discord auto-linkifies bare URLs (blue, clickable).
+ * Avoid `[label](url)` markdown here — it breaks when the URL contains `)` etc.
+ */
+function formatEvidencePlainUrls(text) {
+  const t = String(text || '').trim();
+  if (!t) return '—';
+  const urlRe = /(https?:\/\/[^\s<]+)/gi;
+  const urls = [];
+  let m;
+  while ((m = urlRe.exec(t)) !== null) urls.push(m[0]);
+  if (urls.length) return urls.join('\n').slice(0, 2000);
+  return t.slice(0, 1024);
 }
 
 async function defer(interaction, ephemeral = false) {
@@ -95,6 +127,8 @@ module.exports = {
   tierRank,
   typeLetterToName,
   parseDurationToDate,
+  parseCooldownToMs,
+  formatEvidencePlainUrls,
   defer,
   fail,
   errorEmbed,

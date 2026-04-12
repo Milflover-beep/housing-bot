@@ -8,11 +8,9 @@ module.exports = function uuidCommands(ctx) {
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = interaction.options.getString('ign').trim();
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const uuid = interaction.options.getString('uuid').trim();
-    const existing = await pool.query('SELECT id FROM uuid_registry WHERE LOWER(ign) = $1', [
-      normalizeIgn(ign),
-    ]);
+    const existing = await pool.query('SELECT id FROM uuid_registry WHERE LOWER(ign) = $1', [ign]);
     if (existing.rows.length) {
       await pool.query('UPDATE uuid_registry SET uuid = $1 WHERE id = $2', [uuid, existing.rows[0].id]);
     } else {

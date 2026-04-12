@@ -1,8 +1,246 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require('discord.js');
 
 module.exports = function punishmentCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn, getSlashSubcommand, resolveGuildMember } = ctx;
+  const {
+    pool,
+    requireLevel,
+    defer,
+    normalizeIgn,
+    resolveGuildMember,
+    parseCooldownToMs,
+    formatEvidencePlainUrls,
+  } = ctx;
   const mgr = PermissionFlagsBits.ManageRoles;
+
+  async function getQueueRow(queueId) {
+    const q = await pool.query('SELECT * FROM punishment_queue WHERE id = $1', [queueId]);
+    return q.rows[0] || null;
+  }
+
+  async function getLogForQueue(row) {
+    if (!row?.punishment_log_id) return null;
+    const l = await pool.query('SELECT * FROM punishment_logs WHERE id = $1', [row.punishment_log_id]);
+    return l.rows[0] || null;
+  }
+
+  async function getPendingQueueItems() {
+    const q = await pool.query(
+      "SELECT * FROM punishment_queue WHERE status = 'pending' ORDER BY id ASC"
+    );
+    const items = [];
+    for (const row of q.rows) {
+      const log = await getLogForQueue(row);
+      if (log) items.push({ queue: row, log });
+    }
+    return items;
+  }
+
+  function buildQueueReviewEmbed(queue, log, pageNum, totalPages) {
+    const evidenceText = formatEvidencePlainUrls(log.evidence);
+    const description = `**Player:** \`${log.user_ign}\`\n**Staff:** ${log.staff_ign || '—'}\n\n**📎 Evidence**\n${evidenceText}`;
+    return new EmbedBuilder()
+      .setTitle(`Manager queue — ${pageNum}/${totalPages} (queue #${queue.id} · log #${log.id})`)
+      .setColor(0x5865f2)
+      .setDescription(description.slice(0, 4096))
+      .addFields(
+        { name: '📄 Details', value: (log.punishment_details || '—').slice(0, 1024) },
+        {
+          name: '⏱️ Cooldown after accept',
+          value: log.cooldown_raw
+            ? `\`${log.cooldown_raw}\` (**d**=days **h**=hours **m**=minutes) → staff ping when this period ends (unban reminder)`
+            : 'None (no timed unban ping)',
+          inline: false,
+        }
+      )
+      .setFooter({ text: 'Accept approves the punishment; Deny voids it.' })
+      .setTimestamp();
+  }
+
+  async function renderQueuePage(interaction, items, index) {
+    if (!items.length) {
+      return interaction.editReply({
+        content: 'Queue is empty (no pending items).',
+        embeds: [],
+        components: [],
+      });
+    }
+    const safeIdx = Math.min(Math.max(0, index), items.length - 1);
+    const { queue, log } = items[safeIdx];
+    const embed = buildQueueReviewEmbed(queue, log, safeIdx + 1, items.length);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`pq|nav|${queue.id}|prev`)
+        .setLabel('◀ Previous')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safeIdx === 0),
+      new ButtonBuilder()
+        .setCustomId(`pq|nav|${queue.id}|next`)
+        .setLabel('Next ▶')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(safeIdx >= items.length - 1),
+      new ButtonBuilder()
+        .setCustomId(`pq|acc|${queue.id}`)
+        .setLabel('Accept')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`pq|den|${queue.id}`)
+        .setLabel('Deny')
+        .setStyle(ButtonStyle.Danger)
+    );
+    await interaction.editReply({ embeds: [embed], components: [row] });
+  }
+
+  async function applyAccept(queueId) {
+    const row = await getQueueRow(queueId);
+    if (!row || row.status !== 'pending') return { ok: false, reason: 'no_pending' };
+    const log = await getLogForQueue(row);
+    if (!log) return { ok: false, reason: 'no_log' };
+
+    let reversalAt = null;
+    if (log.cooldown_raw) {
+      const ms = parseCooldownToMs(log.cooldown_raw);
+      if (ms != null && ms > 0) {
+        reversalAt = new Date(Date.now() + ms);
+      }
+    }
+
+    await pool.query(
+      `UPDATE punishment_logs SET status = 'active', punishment_status = 'active',
+         reversal_remind_at = $2, reversal_reminded = false WHERE id = $1`,
+      [log.id, reversalAt]
+    );
+    await pool.query(`UPDATE punishment_queue SET status = 'accepted' WHERE id = $1`, [queueId]);
+    return { ok: true, logId: log.id, queueId };
+  }
+
+  async function applyDeny(queueId) {
+    const row = await getQueueRow(queueId);
+    if (!row || row.status !== 'pending') return { ok: false, reason: 'no_pending' };
+    const log = await getLogForQueue(row);
+    if (!log) return { ok: false, reason: 'no_log' };
+
+    await pool.query(
+      `UPDATE punishment_logs SET status = 'void', punishment_status = 'denied' WHERE id = $1`,
+      [log.id]
+    );
+    await pool.query(`UPDATE punishment_queue SET status = 'denied' WHERE id = $1`, [queueId]);
+    return { ok: true, logId: log.id, queueId };
+  }
+
+  async function handleCheckqueue(interaction) {
+    await defer(interaction, true);
+    if (!interaction.guild) {
+      return interaction.editReply({ content: '❌ Use this command in a server.' });
+    }
+    const member = await resolveGuildMember(interaction);
+    if (!requireLevel(member, 3)) {
+      return interaction.editReply({
+        content:
+          '❌ Managers or higher only. If you have the manager role, enable **Server Members Intent** for the bot or try again.',
+      });
+    }
+    const items = await getPendingQueueItems();
+    if (items.length === 0) {
+      return interaction.editReply({ content: 'Queue is empty (no pending items).' });
+    }
+    return renderQueuePage(interaction, items, 0);
+  }
+
+  async function handlePunishmentQueueButton(interaction) {
+    if (!interaction.isButton() || !interaction.customId.startsWith('pq|')) return false;
+    if (!interaction.guild) {
+      await interaction.reply({ content: '❌ Use this in a server.', ephemeral: true });
+      return true;
+    }
+    const member = await resolveGuildMember(interaction);
+    if (!requireLevel(member, 3)) {
+      await interaction.reply({ content: '❌ Managers only.', ephemeral: true });
+      return true;
+    }
+
+    const parts = interaction.customId.split('|');
+    if (parts.length < 3) return false;
+
+    await interaction.deferUpdate();
+
+    if (parts[1] === 'nav') {
+      const queueId = parseInt(parts[2], 10);
+      const dir = parts[3];
+      const items = await getPendingQueueItems();
+      if (!items.length) {
+        return interaction.editReply({
+          content: 'Queue is empty.',
+          embeds: [],
+          components: [],
+        });
+      }
+      const idx = items.findIndex((x) => x.queue.id === queueId);
+      const base = idx >= 0 ? idx : 0;
+      let newIdx = base;
+      if (dir === 'prev') newIdx = Math.max(0, base - 1);
+      else if (dir === 'next') newIdx = Math.min(items.length - 1, base + 1);
+      return renderQueuePage(interaction, items, newIdx);
+    }
+
+    if (parts[1] === 'acc') {
+      const queueId = parseInt(parts[2], 10);
+      const res = await applyAccept(queueId);
+      if (!res.ok) {
+        const items = await getPendingQueueItems();
+        if (!items.length) {
+          return interaction.editReply({
+            content: '❌ That item is no longer pending (or was already processed). Queue is empty.',
+            embeds: [],
+            components: [],
+          });
+        }
+        return renderQueuePage(interaction, items, 0);
+      }
+      const items = await getPendingQueueItems();
+      if (!items.length) {
+        return interaction.editReply({
+          content: `✅ Accepted punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
+          embeds: [],
+          components: [],
+        });
+      }
+      return renderQueuePage(interaction, items, 0);
+    }
+
+    if (parts[1] === 'den') {
+      const queueId = parseInt(parts[2], 10);
+      const res = await applyDeny(queueId);
+      if (!res.ok) {
+        const items = await getPendingQueueItems();
+        if (!items.length) {
+          return interaction.editReply({
+            content: '❌ That item is no longer pending. Queue is empty.',
+            embeds: [],
+            components: [],
+          });
+        }
+        return renderQueuePage(interaction, items, 0);
+      }
+      const items = await getPendingQueueItems();
+      if (!items.length) {
+        return interaction.editReply({
+          content: `✅ Denied punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
+          embeds: [],
+          components: [],
+        });
+      }
+      return renderQueuePage(interaction, items, 0);
+    }
+
+    return false;
+  }
 
   async function handleLog(interaction) {
     await defer(interaction, true);
@@ -16,23 +254,39 @@ module.exports = function punishmentCommands(ctx) {
           '❌ Staff or higher only. If you have the staff role, try again or ask an admin to enable **Server Members Intent** so the bot can see your roles.',
       });
     }
-    const userIgn = interaction.options.getString('user-ign');
+    const userIgn = normalizeIgn(interaction.options.getString('user-ign'));
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence') || '';
-    const punishment = interaction.options.getString('punishment') || 'other';
+    const evidenceTrim = evidence.trim();
+    if (evidenceTrim && !/https?:\/\//i.test(evidenceTrim)) {
+      return interaction.editReply({
+        content:
+          '❌ **Evidence** must include at least one **`http://`** or **`https://`** link (paste the proof URL).',
+      });
+    }
+    const cooldownRaw = interaction.options.getString('cooldown')?.trim() || '';
+    if (cooldownRaw) {
+      const ms = parseCooldownToMs(cooldownRaw);
+      if (ms === undefined) {
+        return interaction.editReply({
+          content:
+            '❌ Invalid **cooldown**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`).',
+        });
+      }
+    }
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
 
     try {
       const ins = await pool.query(
-        `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status)
-         VALUES ($1, $2, $3, $4, NOW(), $5, $6, NOW(), 'queued', 'pending_review')
+        `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw)
+         VALUES ($1, $2, $3, $4, NOW(), $5, NULL, NOW(), 'queued', 'pending_review', $6)
          RETURNING id`,
-        [userIgn, staffIgn, evidence, details, staffDiscordId, punishment]
+        [userIgn, staffIgn, evidence, details, staffDiscordId, cooldownRaw || null]
       );
       const logId = ins.rows[0].id;
 
-      const summary = `${punishment}: ${(details || '').slice(0, 200)}`;
+      const summary = (details || '').slice(0, 200);
       try {
         await pool.query(
           `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, created_at)
@@ -54,10 +308,13 @@ module.exports = function punishmentCommands(ctx) {
         }
       }
 
+      const cdNote = cooldownRaw
+        ? `\nAfter a manager accepts: **${cooldownRaw}** — staff are pinged when that time is up (unban reminder).`
+        : '';
       await interaction.editReply({
         content:
           `✅ Logged punishment **#${logId}** for **${userIgn}** and added it to the **manager review queue**.\n` +
-          `Managers use \`/checkqueue list\` → \`/checkqueue proof\` → \`/checkqueue accept\` or \`/deny\`.`,
+          `Managers use **/checkqueue** (pages + Accept/Deny).${cdNote}`,
       });
     } catch (e) {
       console.error('handleLog:', e);
@@ -68,7 +325,7 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({
         content:
           `❌ Database error while logging punishment.${hint}\n` +
-          `Confirm \`punishment_logs\` and \`punishment_queue\` match \`schema.sql\` (including \`punishment_log_id\` on the queue).`,
+          `Confirm \`punishment_logs\` and \`punishment_queue\` match \`schema.sql\`.`,
       });
     }
   }
@@ -94,7 +351,7 @@ module.exports = function punishmentCommands(ctx) {
     const merged = [
       ...pun.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),
-        line: `**Punishment** #${row.id} — ${row.punishment || '?'} — ${(row.punishment_details || '').slice(0, 120)} (${row.status}/${row.punishment_status})`,
+        line: `**Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status})`,
       })),
       ...bl.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),
@@ -135,9 +392,9 @@ module.exports = function punishmentCommands(ctx) {
     }
     const chunks = r.rows.map(
       (row) =>
-        `**#${row.id}** ${row.punishment}\nDetails: ${row.punishment_details || '—'}\nEvidence: ${
-          row.evidence || '—'
-        }\nStatus: ${row.status} / ${row.punishment_status}\n`
+        `**#${row.id}**\nDetails: ${row.punishment_details || '—'}\nEvidence: ${row.evidence || '—'}\nStatus: ${
+          row.status
+        } / ${row.punishment_status}\n`
     );
     await interaction.editReply({ content: chunks.join('\n').slice(0, 3900) });
   }
@@ -156,6 +413,37 @@ module.exports = function punishmentCommands(ctx) {
     });
   }
 
+  async function handleRemovepunishment(interaction) {
+    await defer(interaction, true);
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
+    }
+    const id = interaction.options.getInteger('id', true);
+    const conn = await pool.connect();
+    try {
+      await conn.query('BEGIN');
+      await conn.query('DELETE FROM punishment_queue WHERE punishment_log_id = $1', [id]);
+      const del = await conn.query('DELETE FROM punishment_logs WHERE id = $1 RETURNING user_ign', [id]);
+      await conn.query('COMMIT');
+      if (del.rowCount === 0) {
+        return interaction.editReply({
+          content: `❌ No punishment log with id **${id}**. Use the number from **/history** (e.g. **Punishment #42** → \`42\`).`,
+        });
+      }
+      return interaction.editReply({
+        content: `✅ Removed punishment log **#${id}** for **${del.rows[0].user_ign}** (and any linked queue row).`,
+      });
+    } catch (e) {
+      await conn.query('ROLLBACK').catch(() => {});
+      console.error('removepunishment:', e);
+      return interaction.editReply({
+        content: `❌ Could not remove punishment: ${String(e.message || e).slice(0, 200)}`,
+      });
+    } finally {
+      conn.release();
+    }
+  }
+
   async function handleBoosterpuncheck(interaction) {
     await defer(interaction, false);
     if (!requireLevel(interaction.member, 2)) {
@@ -168,119 +456,15 @@ module.exports = function punishmentCommands(ctx) {
     );
     if (r.rows.length === 0) {
       return interaction.editReply({
-        content: 'No finalized active punishments (manager-approved). Pending items are in `/checkqueue list`.',
+        content: 'No finalized active punishments (manager-approved). Pending items are in `/checkqueue`.',
       });
     }
-    const desc = r.rows.map((row) => `**${row.user_ign}** — ${row.punishment} (#${row.id})`).join('\n');
+    const desc = r.rows
+      .map((row) => `**${row.user_ign}** (#${row.id}) — ${(row.punishment_details || '').slice(0, 60)}`)
+      .join('\n');
     await interaction.editReply({
       embeds: [new EmbedBuilder().setTitle('Active punishments').setDescription(desc.slice(0, 3900))],
     });
-  }
-
-  async function getQueueRow(queueId) {
-    const q = await pool.query('SELECT * FROM punishment_queue WHERE id = $1', [queueId]);
-    return q.rows[0] || null;
-  }
-
-  async function getLogForQueue(row) {
-    if (!row?.punishment_log_id) return null;
-    const l = await pool.query('SELECT * FROM punishment_logs WHERE id = $1', [row.punishment_log_id]);
-    return l.rows[0] || null;
-  }
-
-  async function handleCheckqueue(interaction) {
-    const sub = getSlashSubcommand(interaction);
-    const ephemeral = sub === 'proof';
-    await defer(interaction, ephemeral);
-    if (!interaction.guild) {
-      return interaction.editReply({ content: '❌ Use this command in a server.' });
-    }
-    const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 3)) {
-      return interaction.editReply({
-        content:
-          '❌ Managers or higher only. If you have the manager role, enable **Server Members Intent** for the bot or try again.',
-      });
-    }
-    if (!sub) {
-      return interaction.editReply({
-        content:
-          '❌ Pick a subcommand: `list`, `proof`, `accept`, or `deny`. If you did, re-register slash commands and pick the subcommand from the menu.',
-      });
-    }
-
-    if (sub === 'list') {
-      const r = await pool.query(
-        "SELECT * FROM punishment_queue WHERE status = 'pending' ORDER BY id ASC LIMIT 25"
-      );
-      if (r.rows.length === 0) {
-        return interaction.editReply({ content: 'Queue is empty (no pending items).' });
-      }
-      const lines = r.rows.map(
-        (row) =>
-          `**Queue #${row.id}** → log **#${row.punishment_log_id || '?'}** — \`${row.ign}\` — ${(row.details || '').slice(0, 100)}`
-      );
-      return interaction.editReply({ content: lines.join('\n').slice(0, 3900) });
-    }
-
-    if (sub === 'proof') {
-      const queueId = interaction.options.getInteger('queue-id');
-      const row = await getQueueRow(queueId);
-      if (!row || row.status !== 'pending') {
-        return interaction.editReply({ content: '❌ No pending queue item with that id.' });
-      }
-      const log = await getLogForQueue(row);
-      if (!log) {
-        return interaction.editReply({ content: '❌ Queue row has no linked punishment log.' });
-      }
-      const embed = new EmbedBuilder()
-        .setTitle(`Proof — queue #${queueId} / log #${log.id}`)
-        .setColor(0x5865f2)
-        .addFields(
-          { name: 'Player', value: log.user_ign || '—', inline: true },
-          { name: 'Punishment', value: log.punishment || '—', inline: true },
-          { name: 'Staff', value: log.staff_ign || '—', inline: true },
-          { name: 'Details', value: (log.punishment_details || '—').slice(0, 1000) },
-          { name: 'Evidence', value: (log.evidence || '—').slice(0, 1000) },
-          { name: 'Status', value: `${log.status} / ${log.punishment_status}`, inline: true }
-        )
-        .setTimestamp();
-      return interaction.editReply({ embeds: [embed] });
-    }
-
-    const queueId = interaction.options.getInteger('queue-id');
-    const row = await getQueueRow(queueId);
-    if (!row || row.status !== 'pending') {
-      return interaction.editReply({ content: '❌ No pending queue item with that id.' });
-    }
-    const log = await getLogForQueue(row);
-    if (!log) {
-      return interaction.editReply({ content: '❌ Missing punishment log for this queue row.' });
-    }
-
-    if (sub === 'accept') {
-      await pool.query(
-        `UPDATE punishment_logs SET status = 'active', punishment_status = 'active' WHERE id = $1`,
-        [log.id]
-      );
-      await pool.query(`UPDATE punishment_queue SET status = 'accepted' WHERE id = $1`, [queueId]);
-      return interaction.editReply({
-        content: `✅ Accepted punishment **log #${log.id}** (queue **#${queueId}**). It is now enforced.`,
-      });
-    }
-
-    if (sub === 'deny') {
-      await pool.query(
-        `UPDATE punishment_logs SET status = 'void', punishment_status = 'denied' WHERE id = $1`,
-        [log.id]
-      );
-      await pool.query(`UPDATE punishment_queue SET status = 'denied' WHERE id = $1`, [queueId]);
-      return interaction.editReply({
-        content: `✅ Denied punishment **log #${log.id}** (queue **#${queueId}**).`,
-      });
-    }
-
-    return interaction.editReply({ content: '❌ Unknown subcommand.' });
   }
 
   const commands = [
@@ -289,9 +473,17 @@ module.exports = function punishmentCommands(ctx) {
       .setDescription('Log a punishment and send it to the manager review queue')
       .addStringOption((o) => o.setName('user-ign').setDescription('Player IGN').setRequired(true))
       .addStringOption((o) => o.setName('details').setDescription('Details').setRequired(true))
-      .addStringOption((o) => o.setName('evidence').setDescription('Evidence URL/text').setRequired(false))
       .addStringOption((o) =>
-        o.setName('punishment').setDescription('Type').setRequired(false)
+        o
+          .setName('evidence')
+          .setDescription('Proof link(s) — must include https:// (shown as links in /checkqueue)')
+          .setRequired(false)
+      )
+      .addStringOption((o) =>
+        o
+          .setName('cooldown')
+          .setDescription('d=days h=hours m=minutes — ping @staff when time is up for unban (e.g. 1d, 12h, 1m)')
+          .setRequired(false)
       )
       .setDefaultMemberPermissions(mgr),
     new SlashCommandBuilder()
@@ -313,32 +505,18 @@ module.exports = function punishmentCommands(ctx) {
       .setDefaultMemberPermissions(mgr),
     new SlashCommandBuilder()
       .setName('checkqueue')
-      .setDescription('Review punishment queue from /log (Manager+)')
-      .addSubcommand((s) => s.setName('list').setDescription('List pending items'))
-      .addSubcommand((s) =>
-        s
-          .setName('proof')
-          .setDescription('Show full proof for a queue item')
-          .addIntegerOption((o) =>
-            o.setName('queue-id').setDescription('punishment_queue.id').setRequired(true)
-          )
+      .setDescription('Review punishment queue from /log — paged proof, Accept / Deny (Manager+)'),
+    new SlashCommandBuilder()
+      .setName('removepunishment')
+      .setDescription('Delete a punishment log row (removes it from /history)')
+      .addIntegerOption((o) =>
+        o
+          .setName('id')
+          .setDescription('Punishment log id from /history (e.g. Punishment #42 → 42)')
+          .setRequired(true)
+          .setMinValue(1)
       )
-      .addSubcommand((s) =>
-        s
-          .setName('accept')
-          .setDescription('Approve the punishment')
-          .addIntegerOption((o) =>
-            o.setName('queue-id').setDescription('punishment_queue.id').setRequired(true)
-          )
-      )
-      .addSubcommand((s) =>
-        s
-          .setName('deny')
-          .setDescription('Reject the punishment')
-          .addIntegerOption((o) =>
-            o.setName('queue-id').setDescription('punishment_queue.id').setRequired(true)
-          )
-      ),
+      .setDefaultMemberPermissions(mgr),
   ];
 
   return {
@@ -350,6 +528,8 @@ module.exports = function punishmentCommands(ctx) {
       totalhistory: handleTotalhistory,
       boosterpuncheck: handleBoosterpuncheck,
       checkqueue: handleCheckqueue,
+      removepunishment: handleRemovepunishment,
     },
+    buttonHandlers: [handlePunishmentQueueButton],
   };
 };

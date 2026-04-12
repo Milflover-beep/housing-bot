@@ -6,7 +6,7 @@ module.exports = function reportsCommands(ctx) {
 
   async function handleReport(interaction) {
     await defer(interaction, true);
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const reason = interaction.options.getString('reason');
     await pool.query(
       `INSERT INTO reports (ign, reason, punishment_issued, discord_user_id, date_issued)

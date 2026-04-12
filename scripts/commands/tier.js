@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { syncTierListChannel, getTierListChannelId } = require('../lib/tierListChannelSync');
 
 module.exports = function tierCommands(ctx) {
   const {
@@ -19,7 +20,7 @@ module.exports = function tierCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const tier = interaction.options.getString('tier').toUpperCase();
     const discordUser = interaction.options.getUser('discord');
     const tester = interaction.user.username;
@@ -33,9 +34,10 @@ module.exports = function tierCommands(ctx) {
 
     const existing = await pool.query(
       'SELECT * FROM tier_results WHERE LOWER(ign) = $1 AND type = $2 ORDER BY created_at DESC LIMIT 1',
-      [ign.toLowerCase(), type]
+      [ign, type]
     );
 
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [ign, type]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,
@@ -63,6 +65,7 @@ module.exports = function tierCommands(ctx) {
       embed.addFields({ name: 'Note', value: `Previously ${existing.rows[0].tier}` });
     }
     await interaction.editReply({ embeds: [embed] });
+    await syncTierListChannel(interaction.client, pool);
   }
 
   async function handleViewtier(interaction) {
@@ -72,7 +75,10 @@ module.exports = function tierCommands(ctx) {
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const r = await pool.query(
-      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 ORDER BY created_at DESC',
+      `SELECT DISTINCT ON (type) type, tier, tester, ign, created_at
+       FROM tier_results
+       WHERE LOWER(ign) = $1
+       ORDER BY type, id DESC`,
       [ign]
     );
     if (r.rows.length === 0) {
@@ -111,6 +117,7 @@ module.exports = function tierCommands(ctx) {
     await interaction.editReply({
       content: `✅ Removed **${typeLetterToName(r.type)}** tier **${r.tier}** for **${r.ign}**.`,
     });
+    await syncTierListChannel(interaction.client, pool);
   }
 
   async function handleTierids(interaction) {
@@ -146,7 +153,10 @@ module.exports = function tierCommands(ctx) {
     const fightType = interaction.options.getString('type');
     const letter = fightType === 'prime' ? 'P' : fightType === 'elite' ? 'E' : 'A';
     const res = await pool.query(
-      'SELECT ign, tier, tester, created_at FROM tier_results WHERE type = $1',
+      `SELECT DISTINCT ON (LOWER(ign)) ign, tier, tester, created_at
+       FROM tier_results
+       WHERE type = $1
+       ORDER BY LOWER(ign), id DESC`,
       [letter]
     );
     const rows = [...res.rows].sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
@@ -167,63 +177,20 @@ module.exports = function tierCommands(ctx) {
     if (!isOwner(interaction.user.id)) {
       return interaction.editReply({ content: '❌ Bot owner only.' });
     }
-    const channelId = interaction.options.getString('channel-id') || process.env.TIERLIST_CHANNEL_ID;
+    const channelId =
+      interaction.options.getString('channel-id')?.trim() || getTierListChannelId();
     if (!channelId) {
       return interaction.editReply({
-        content: '❌ Set `TIERLIST_CHANNEL_ID` in .env or pass `channel-id`.',
+        content:
+          '❌ Set `TIERLIST_PUBLIC_CHANNEL_ID` / `TIERLIST_CHANNEL_ID` in .env or pass `channel-id`.',
       });
     }
     const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) {
       return interaction.editReply({ content: '❌ Invalid channel.' });
     }
-
-    const tiers = [
-      { letter: 'P', position: 0 },
-      { letter: 'E', position: 1 },
-      { letter: 'A', position: 2 },
-    ];
-    for (const { letter, position } of tiers) {
-      const res = await pool.query(
-        'SELECT ign, tier FROM tier_results WHERE type = $1',
-        [letter]
-      );
-      const rows = [...res.rows].sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
-      const name = typeLetterToName(letter);
-      const desc = rows.length ? rows.map((r) => `**${r.ign}** — ${r.tier}`).join('\n') : '_Empty._';
-      const embed = new EmbedBuilder()
-        .setTitle(`${name} public tier list`)
-        .setColor(0x2ecc71)
-        .setDescription(desc.slice(0, 3900))
-        .setTimestamp();
-
-      const existing = await pool.query(
-        'SELECT message_id FROM tier_list_messages WHERE position = $1',
-        [position]
-      );
-      if (existing.rows[0]?.message_id) {
-        const msg = await channel.messages.fetch(existing.rows[0].message_id).catch(() => null);
-        if (msg) await msg.edit({ embeds: [embed] });
-        else {
-          const sent = await channel.send({ embeds: [embed] });
-          await pool.query(
-            `INSERT INTO tier_list_messages (position, message_id, channel_id, updated_at)
-             VALUES ($1, $2, $3, NOW())
-             ON CONFLICT (position) DO UPDATE SET message_id = $2, channel_id = $3, updated_at = NOW()`,
-            [position, sent.id, channelId]
-          );
-        }
-      } else {
-        const sent = await channel.send({ embeds: [embed] });
-        await pool.query(
-          `INSERT INTO tier_list_messages (position, message_id, channel_id, updated_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (position) DO UPDATE SET message_id = $2, channel_id = $3, updated_at = NOW()`,
-          [position, sent.id, channelId]
-        );
-      }
-    }
-    await interaction.editReply({ content: `✅ Tier list messages updated in <#${channelId}>.` });
+    await syncTierListChannel(interaction.client, pool, channelId);
+    await interaction.editReply({ content: `✅ Tier list (Prime + Elite + Apex) reposted in <#${channelId}>.` });
   }
 
   const mgr = PermissionFlagsBits.ManageRoles;

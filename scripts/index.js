@@ -8,6 +8,10 @@ const {
 } = require('discord.js');
 const pool = require('./lib/pool');
 const { ensureDatabaseSchema } = require('./lib/ensureSchema');
+const {
+  startPunishmentExpiryPoller,
+  getPunishmentPingsChannelId,
+} = require('./lib/punishmentExpiryPoller');
 const { build } = require('./commands');
 
 // GuildMembers is privileged — only add after enabling "Server Members Intent" in the
@@ -26,6 +30,12 @@ client.once('ready', async () => {
     await ensureDatabaseSchema(pool);
   } catch (err) {
     console.error('❌ Database schema ensure failed:', err?.message || err);
+  }
+  startPunishmentExpiryPoller(client, pool);
+  if (!getPunishmentPingsChannelId()) {
+    console.warn(
+      '⚠️ Punishment cooldown pings are OFF: set PUNISHMENT_PINGS_CHANNEL_ID, PINGS_CHANNEL_ID, or PUNISHMENT_ACCEPT_NOTIFY_CHANNEL_ID in .env'
+    );
   }
   console.log(`✅ Logged in as ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);

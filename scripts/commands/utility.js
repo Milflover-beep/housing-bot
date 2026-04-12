@@ -5,12 +5,12 @@ module.exports = function utilityCommands(ctx) {
   const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleUpdate(interaction) {
-    await defer(interaction, true);
+    await defer(interaction, false);
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
     const oldIgn = normalizeIgn(interaction.options.getString('old-ign'));
-    const newIgn = interaction.options.getString('new-ign').trim();
+    const newIgn = normalizeIgn(interaction.options.getString('new-ign'));
     const client = await pool.connect();
     try {
       await client.query('BEGIN');

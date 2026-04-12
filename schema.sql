@@ -78,7 +78,10 @@ CREATE TABLE IF NOT EXISTS punishment_logs (
   undo_punishment    TEXT,
   created_at         TIMESTAMPTZ DEFAULT NOW(),
   status             TEXT,
-  punishment_status  TEXT
+  punishment_status  TEXT,
+  cooldown_raw       TEXT,
+  reversal_remind_at TIMESTAMPTZ,
+  reversal_reminded  BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS reports (
@@ -195,13 +198,13 @@ CREATE TABLE IF NOT EXISTS gradient_requests (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Application denial cooldowns (/deny); keyed by discord + rank ladder
+-- Application denial cooldowns (/deny); one row per Discord user (any ladder blocks all until expiry)
 CREATE TABLE IF NOT EXISTS application_denials (
   id               SERIAL PRIMARY KEY,
   discord_id       TEXT NOT NULL,
   ign              TEXT NOT NULL,
-  rank_type        TEXT NOT NULL CHECK (rank_type IN ('P', 'E', 'A')),
+  rank_type        TEXT CHECK (rank_type IS NULL OR rank_type IN ('P', 'E', 'A')),
   cooldown_until   TIMESTAMPTZ NOT NULL,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (discord_id, rank_type)
+  UNIQUE (discord_id)
 );

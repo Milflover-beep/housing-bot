@@ -6,9 +6,20 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
+const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
+const { syncTierListChannel } = require('../lib/tierListChannelSync');
 
 module.exports = function coreCommands(ctx) {
-  const { pool, getMemberLevel, requireLevel, VALID_TIERS, defer } = ctx;
+  const {
+    pool,
+    getMemberLevel,
+    requireLevel,
+    VALID_TIERS,
+    defer,
+    normalizeIgn,
+    applicantRoleIds,
+    applicantRoleName,
+  } = ctx;
 
   function isBlacklisted(rows) {
     return rows.some((row) => {
@@ -26,16 +37,19 @@ module.exports = function coreCommands(ctx) {
   }
 
   async function handleCheck(interaction) {
-    await defer(interaction, true);
+    await defer(interaction, false);
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff only.' });
     }
-    const ign = interaction.options.getString('ign').toLowerCase();
-    const discord = interaction.options.getString('discord').replace(/[<@!>]/g, '');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const discordUser = interaction.options.getUser('discord', true);
+    const discord = discordUser.id;
     const rankType = interaction.options.getString('rank-type');
-    const rankLetter = { prime: 'P', elite: 'E', apex: 'A' }[rankType];
+    const applyLadderLetter = rankType.charAt(0).toUpperCase(); // P | E | A
+    const LADDER_ORDER = { P: 0, E: 1, A: 2 };
+    const LADDER_NAME = { P: 'Prime', E: 'Elite', A: 'Apex' };
 
-    const [blacklistRows, adminBlacklistRows, timeoutRows, altRows, tierRows] = await Promise.all([
+    const [blacklistRows, adminBlacklistRows, timeoutRows, altRows, allTierRows] = await Promise.all([
       pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
       pool.query(
         'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
@@ -48,18 +62,21 @@ module.exports = function coreCommands(ctx) {
       pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
         ign,
       ]),
-      pool.query('SELECT * FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [
-        ign,
-        rankType.charAt(0).toUpperCase(),
-      ]),
+      pool.query(
+        `SELECT DISTINCT ON (type) type, tier, created_at
+         FROM tier_results
+         WHERE LOWER(ign) = $1 AND type IN ('P','E','A')
+         ORDER BY type, id DESC`,
+        [ign]
+      ),
     ]);
 
     let denialRows = { rows: [] };
     try {
       denialRows = await pool.query(
         `SELECT * FROM application_denials
-         WHERE discord_id = $1 AND rank_type = $2 AND cooldown_until > NOW()`,
-        [discord, rankLetter]
+         WHERE discord_id = $1 AND cooldown_until > NOW()`,
+        [discord]
       );
     } catch (e) {
       if (e && e.code !== '42P01') throw e;
@@ -99,10 +116,30 @@ module.exports = function coreCommands(ctx) {
       issues.push(`⏳ **Application cooldown** — cannot re-apply until <t:${ts}:F> (<t:${ts}:R>)`);
     }
 
-    if (tierRows.rows.length > 0) {
-      const existing = tierRows.rows[tierRows.rows.length - 1];
+    /** Latest tier row per ladder (Prime / Elite / Apex). Re-applying on the same ladder is OK (higher tier goal). */
+    const latestByLadder = {};
+    for (const row of allTierRows.rows) {
+      if (!latestByLadder[row.type]) latestByLadder[row.type] = row;
+    }
+    let maxHeldOrder = -1;
+    let maxHeldLetter = null;
+    for (const letter of ['P', 'E', 'A']) {
+      if (latestByLadder[letter]) {
+        const o = LADDER_ORDER[letter];
+        if (o > maxHeldOrder) {
+          maxHeldOrder = o;
+          maxHeldLetter = letter;
+        }
+      }
+    }
+    const applyOrder = LADDER_ORDER[applyLadderLetter];
+    if (maxHeldOrder > applyOrder && maxHeldLetter) {
+      const held = latestByLadder[maxHeldLetter];
       issues.push(
-        `📋 **Already ranked** — ${rankType} ${existing.tier} (submitted ${timeAgo(existing.created_at)})`
+        `📉 **Applying below current ladder** — on file they have **${LADDER_NAME[maxHeldLetter]}** ` +
+          `(tier **${held.tier}**, ${timeAgo(held.created_at)}). They are checking for **${
+            LADDER_NAME[applyLadderLetter]
+          }**, which is a lower ladder. Confirm this is intentional.`
       );
     }
 
@@ -111,9 +148,68 @@ module.exports = function coreCommands(ctx) {
       issues.push(`🔀 **Known alts:**\n${altList}`);
     }
 
-    if (eligible && issues.length === 0) {
-      embed.setColor(0x00c853);
-      embed.setDescription(`✅ **${ign} is eligible** for ${rankType} tryout.\nNo issues found.`);
+    /** Full pass: no hard blocks and no notes (timeouts, already ranked, alts, etc.). Applicant role only here. */
+    const passedCheck = eligible && issues.length === 0;
+
+    let roleNote = '';
+    if (passedCheck) {
+      if (interaction.guild) {
+        try {
+          const member = await interaction.guild.members.fetch(discordUser.id);
+          const ids = applicantRoleIds();
+          if (ids.length > 0) {
+            let foundInGuild = 0;
+            for (const rid of ids) {
+              let role = interaction.guild.roles.cache.get(rid);
+              if (!role) role = await interaction.guild.roles.fetch(rid).catch(() => null);
+              if (!role) continue;
+              foundInGuild += 1;
+              if (!member.roles.cache.has(role.id)) {
+                await member.roles.add(role);
+              }
+            }
+            if (foundInGuild === 0) {
+              roleNote = `\n\n⚠️ Applicant role: none of the configured role IDs exist in this server. Check **BOT_ROLE_APPLICANT_ID** (Server Settings → Roles → right‑click role → Copy ID).`;
+            }
+          } else {
+            const name = applicantRoleName();
+            const role = interaction.guild.roles.cache.find((r) => r.name === name);
+            if (!role) {
+              roleNote = `\n\n⚠️ No role named **${name}**. Set **BOT_ROLE_APPLICANT_ID** to the role’s snowflake, or create a role with that exact name.`;
+            } else if (!member.roles.cache.has(role.id)) {
+              await member.roles.add(role);
+            }
+          }
+        } catch (e) {
+          const code = e && e.code;
+          const raw = e && e.message ? String(e.message) : String(e);
+          console.warn('check: applicant role:', raw);
+          let hint = raw;
+          if (code === 50013 || /missing permissions/i.test(raw)) {
+            hint =
+              'Missing permissions. Move **this bot’s role** above the applicant role in **Server Settings → Roles**, and ensure the bot has **Manage Roles**.';
+          } else if (code === 50001 || /lacks access/i.test(raw)) {
+            hint = 'Missing access to that member or role.';
+          } else if (code === 10007 || /unknown member/i.test(raw)) {
+            hint =
+              'That user is not in this server (or **Server Members Intent** is off — enable it for the bot and restart).';
+          }
+          roleNote = `\n\n⚠️ Could not assign applicant role: ${hint}`;
+        }
+      } else {
+        roleNote = '\n\n⚠️ Run this command in the server to assign the applicant role.';
+      }
+    }
+
+    if (passedCheck) {
+      const ok = `✅ **${ign} is eligible** for ${rankType} tryout.\nNo issues found.${roleNote}`;
+      if (roleNote) {
+        embed.setColor(0xffa000);
+        embed.setDescription(ok);
+      } else {
+        embed.setColor(0x00c853);
+        embed.setDescription(ok);
+      }
     } else if (!eligible) {
       embed.setColor(0xff1744);
       embed.setDescription(`❌ **${ign} is NOT eligible** for ${rankType} tryout.\n\n${issues.join('\n\n')}`);
@@ -123,6 +219,24 @@ module.exports = function coreCommands(ctx) {
     }
 
     await interaction.editReply({ embeds: [embed] });
+
+    // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
+    if (interaction.channel?.isTextBased?.() && process.env.CHECK_LEVELBOT_MESSAGE?.trim()) {
+      const when = (process.env.CHECK_LEVELBOT_WHEN || 'pass').toLowerCase();
+      let shouldSend = false;
+      if (when === 'always') shouldSend = true;
+      else if (when === 'pass') shouldSend = passedCheck;
+      else if (when === 'fail') shouldSend = !passedCheck;
+      if (shouldSend) {
+        const msg = process.env.CHECK_LEVELBOT_MESSAGE.trim()
+          .replace(/\{ign\}/gi, ign)
+          .replace(/\{discord\}/gi, discordUser.id)
+          .replace(/\{mention\}/gi, `<@${discordUser.id}>`);
+        await interaction.channel.send({ content: msg }).catch((e) => {
+          console.warn('check: CHECK_LEVELBOT_MESSAGE send failed:', e.message);
+        });
+      }
+    }
   }
 
   async function handleScore(interaction) {
@@ -130,40 +244,32 @@ module.exports = function coreCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff only.' });
     }
-    const winnerIgn = interaction.options.getString('winner-ign');
-    const loserIgn = interaction.options.getString('loser-ign');
+    const winnerIgn = normalizeIgn(interaction.options.getString('winner-ign'));
+    const loserIgn = normalizeIgn(interaction.options.getString('loser-ign'));
     const finalScore = interaction.options.getString('final-score');
     const fightNumber = interaction.options.getInteger('fight-number');
     const fightType = interaction.options.getString('fight-type');
-    const reportedBy = interaction.user.id;
 
     const insertScore = await pool.query(
       `INSERT INTO scores (winner_ign, loser_ign, final_score, fight_number, reported_by, fight_type, is_voided, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, false, NOW())
-       RETURNING id`,
-      [winnerIgn, loserIgn, finalScore, fightNumber, reportedBy, fightType]
+       RETURNING *`,
+      [winnerIgn, loserIgn, finalScore, fightNumber, interaction.user.id, fightType]
     );
-    const fightDbId = insertScore.rows[0].id;
+    const row = insertScore.rows[0];
 
-    const embed = new EmbedBuilder()
-      .setTitle('⚔️ Fight Recorded')
-      .setColor(0x2196f3)
-      .addFields(
-        { name: '🆔 Fight ID', value: String(fightDbId), inline: true },
-        { name: '🏆 Winner', value: winnerIgn, inline: true },
-        { name: '💀 Loser', value: loserIgn, inline: true },
-        { name: '📊 Score', value: finalScore, inline: true },
-        { name: '🔢 Fight #', value: String(fightNumber), inline: true },
-        {
-          name: '🎖️ Type',
-          value: fightType.charAt(0).toUpperCase() + fightType.slice(1),
-          inline: true,
-        },
-        { name: '📝 Reported by', value: `<@${reportedBy}>`, inline: true }
-      )
-      .setTimestamp();
+    const embed = buildFightScoreLogEmbed(row, {
+      actorUsername: interaction.user.username,
+      mode: 'logged',
+    });
+    const replyEmbed = EmbedBuilder.from(embed).addFields({
+      name: '🆔 Fight ID',
+      value: String(row.id),
+      inline: true,
+    });
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [replyEmbed] });
+    await sendFightScoreLogEmbed(interaction.client, embed);
   }
 
   function fightHistoryEncodeIgn(ignLower) {
@@ -174,17 +280,18 @@ module.exports = function coreCommands(ctx) {
     return Buffer.from(b64, 'base64url').toString('utf8');
   }
 
-  function fightHistoryComponents(ignLower, safePage, totalPages) {
+  function fightHistoryComponents(ignLower, safePage, totalPages, debugIds) {
     if (totalPages <= 1) return [];
     const enc = fightHistoryEncodeIgn(ignLower);
+    const d = debugIds ? '1' : '0';
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`fh|${safePage - 1}|${enc}`)
+        .setCustomId(`fh|${safePage - 1}|${enc}|${d}`)
         .setLabel('◀ Previous')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(safePage <= 1),
       new ButtonBuilder()
-        .setCustomId(`fh|${safePage + 1}|${enc}`)
+        .setCustomId(`fh|${safePage + 1}|${enc}|${d}`)
         .setLabel('Next ▶')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(safePage >= totalPages)
@@ -192,7 +299,7 @@ module.exports = function coreCommands(ctx) {
     return [row];
   }
 
-  async function buildFightHistoryPayload(ignDisplay, ignLower, page) {
+  async function buildFightHistoryPayload(ignDisplay, ignLower, page, showIds) {
     const perPage = 15;
 
     const countRes = await pool.query(
@@ -238,9 +345,10 @@ module.exports = function coreCommands(ctx) {
         const won = r.winner_ign.toLowerCase() === ignLower;
         const opponent = won ? r.loser_ign : r.winner_ign;
         const date = new Date(r.created_at).toLocaleDateString();
+        const idPart = showIds ? ` · **ID** \`${r.id}\`` : '';
         return `${won ? '✅' : '❌'} **${won ? 'W' : 'L'}** vs \`${opponent}\` — ${r.final_score} (Fight #${
           r.fight_number
-        }) — ${date}`;
+        }) — ${date}${idPart}`;
       })
       .join('\n');
 
@@ -255,22 +363,31 @@ module.exports = function coreCommands(ctx) {
         { name: 'Total fights', value: String(totalFights), inline: true }
       )
       .setFooter({
-        text: `Page ${safePage} of ${totalPages} · ${perPage} per page · Use ◀ ▶ or the optional \`page\` parameter`,
+        text:
+          `Page ${safePage} of ${totalPages} · ${perPage} per page · Use ◀ ▶ or the optional \`page\` parameter` +
+          (showIds ? ' · IDs for /updatescore' : ''),
       })
       .setTimestamp();
 
     return {
       embed,
-      components: fightHistoryComponents(ignLower, safePage, totalPages),
+      components: fightHistoryComponents(ignLower, safePage, totalPages, showIds),
     };
   }
 
   async function handleFightHistory(interaction) {
     await defer(interaction, false);
-    const ign = interaction.options.getString('ign');
-    const ignLower = ign.toLowerCase().trim();
+    const ignLower = normalizeIgn(interaction.options.getString('ign'));
+    const ign = ignLower;
     const page = Math.max(1, interaction.options.getInteger('page') ?? 1);
-    const payload = await buildFightHistoryPayload(ign, ignLower, page);
+    const wantsDebug = interaction.options.getBoolean('debug') === true;
+    if (wantsDebug && !requireLevel(interaction.member, 2)) {
+      return interaction.editReply({
+        content: '❌ Only staff can use **debug** (shows database fight IDs for `/updatescore`).',
+      });
+    }
+    const showIds = wantsDebug && requireLevel(interaction.member, 2);
+    const payload = await buildFightHistoryPayload(ign, ignLower, page, showIds);
     if (payload.error) {
       return interaction.editReply({ content: payload.error });
     }
@@ -283,7 +400,7 @@ module.exports = function coreCommands(ctx) {
   async function handleFightHistoryButton(interaction) {
     if (!interaction.customId.startsWith('fh|')) return false;
     const parts = interaction.customId.split('|');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3 && parts.length !== 4) return false;
     const targetPage = parseInt(parts[1], 10);
     if (!Number.isFinite(targetPage) || targetPage < 1) return false;
     let ignLower;
@@ -292,9 +409,18 @@ module.exports = function coreCommands(ctx) {
     } catch {
       return false;
     }
+    const debugFromButton = parts.length === 4 && parts[3] === '1';
+    if (debugFromButton && !requireLevel(interaction.member, 2)) {
+      await interaction.reply({
+        content: '❌ Only staff can use debug fight history.',
+        ephemeral: true,
+      });
+      return true;
+    }
+    const showIds = debugFromButton && requireLevel(interaction.member, 2);
     await interaction.deferUpdate();
     const ignDisplay = ignLower;
-    const payload = await buildFightHistoryPayload(ignDisplay, ignLower, targetPage);
+    const payload = await buildFightHistoryPayload(ignDisplay, ignLower, targetPage, showIds);
     if (payload.error) {
       return interaction.editReply({ content: payload.error, embeds: [], components: [] });
     }
@@ -310,9 +436,9 @@ module.exports = function coreCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
-    const ign = interaction.options.getString('ign');
+    const ign = normalizeIgn(interaction.options.getString('ign'));
     const type = interaction.options.getString('type');
-    const tier = interaction.options.getString('tier').toUpperCase();
+    const tier = interaction.options.getString('tier');
     const discordUser = interaction.options.getUser('discord');
     const tester = interaction.user.username;
 
@@ -324,9 +450,10 @@ module.exports = function coreCommands(ctx) {
 
     const existing = await pool.query(
       'SELECT * FROM tier_results WHERE LOWER(ign) = $1 AND type = $2 ORDER BY created_at DESC LIMIT 1',
-      [ign.toLowerCase(), type]
+      [ign, type]
     );
 
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [ign, type]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,
@@ -363,6 +490,7 @@ module.exports = function coreCommands(ctx) {
     }
 
     await interaction.editReply({ embeds: [embed] });
+    await syncTierListChannel(interaction.client, pool);
   }
 
   async function handleCheckcommands(interaction) {
@@ -415,6 +543,7 @@ module.exports = function coreCommands(ctx) {
         '`/viewwatchlist`',
         '`/checkqueue`',
         '`/getproof`',
+        '`/removepunishment`',
       ]);
     }
     if (lv >= 4) {
@@ -468,9 +597,7 @@ module.exports = function coreCommands(ctx) {
       .setName('check')
       .setDescription('Check player eligibility for applications')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('discord').setDescription('Discord user ID or @mention').setRequired(true)
-      )
+      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
       .addStringOption((o) =>
         o
           .setName('rank-type')
@@ -518,6 +645,12 @@ module.exports = function coreCommands(ctx) {
           .setDescription('Page number, 1 = newest (optional; use buttons on the reply if hidden)')
           .setRequired(false)
           .setMinValue(1)
+      )
+      .addBooleanOption((o) =>
+        o
+          .setName('debug')
+          .setDescription('Staff only: show database fight ID per row (for /updatescore)')
+          .setRequired(false)
       ),
 
     new SlashCommandBuilder()
@@ -538,8 +671,9 @@ module.exports = function coreCommands(ctx) {
       .addStringOption((o) =>
         o
           .setName('tier')
-          .setDescription('Tier (S, A+, A, A-, B+, B, B-, C+, C, C-, D, N/A)')
+          .setDescription('Tier')
           .setRequired(true)
+          .addChoices(...VALID_TIERS.map((t) => ({ name: t, value: t })))
       )
       .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
