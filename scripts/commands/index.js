@@ -4,6 +4,7 @@ const permissions = require('../lib/permissions');
 
 const modules = [
   require('./core'),
+  require('./hypixel'),
   require('./applications'),
   require('./tier'),
   require('./blacklist'),

@@ -60,7 +60,7 @@ client.once(Events.ClientReady, async () => {
   }
   if (!process.env.HYPIXEL_API_KEY?.trim()) {
     console.warn(
-      '⚠️ HYPIXEL_API_KEY is unset — /check will mark everyone not eligible until Hypixel verification is configured.'
+      '⚠️ HYPIXEL_API_KEY is unset — /check cannot auto-verify Hypixel network level (staff can use `/hypixel` once the key is set).'
     );
   }
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);

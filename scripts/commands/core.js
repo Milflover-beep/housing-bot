@@ -93,9 +93,14 @@ module.exports = function coreCommands(ctx) {
     let eligible = true;
     const issues = [];
 
+    /** API/config failures: do not block eligibility; staff verify with `/hypixel`. */
+    let hypixelDegradedNote = '';
     if (!hypixelResult.ok) {
-      eligible = false;
-      issues.push(`📡 ${hypixelResult.message}`);
+      const detail =
+        hypixelResult.message.length > 500
+          ? `${hypixelResult.message.slice(0, 497)}…`
+          : hypixelResult.message;
+      hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Use **\`/hypixel\`** to check manually before tryout.`;
     } else if (hypixelResult.level < 30) {
       eligible = false;
       if (!hypixelResult.hasPlayer) {
@@ -257,14 +262,21 @@ module.exports = function coreCommands(ctx) {
     }
 
     let hypixelLevelField;
-    if (!hypixelResult.ok) {
-      hypixelLevelField = '— *(not verified — see notes)*';
+    if (hypixelDegradedNote) {
+      hypixelLevelField = '— *(not fetched)*';
     } else if (!hypixelResult.hasPlayer) {
       hypixelLevelField = '— *(no Hypixel profile)*';
     } else {
       hypixelLevelField = `**${hypixelResult.level.toFixed(2)}**`;
     }
     embed.addFields({ name: 'Hypixel network level', value: hypixelLevelField, inline: false });
+    if (hypixelDegradedNote) {
+      embed.addFields({
+        name: 'Hypixel API',
+        value: hypixelDegradedNote.slice(0, 1024),
+        inline: false,
+      });
+    }
 
     const headUrl = minecraftHeadUrl(ign);
     if (headUrl) embed.setThumbnail(headUrl);
@@ -579,6 +591,7 @@ module.exports = function coreCommands(ctx) {
     if (lv >= 2) {
       add('Staff+', [
         '`/check`',
+        '`/hypixel`',
         '`/deny`',
         '`/accept`',
         '`/score`',

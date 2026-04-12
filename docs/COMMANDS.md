@@ -44,7 +44,14 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `ign` (string, required) — Minecraft IGN, or **UUID** when the value is longer than 16 characters (passed to Hypixel as `name` vs `uuid`).
   - `discord` (user, required) — linked Discord account (cooldown + applicant role).
   - `rank-type` (choice, required) — `Prime` | `Elite` | `Apex` (must match the ladder you’re checking).
-- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**; players must be **network level 30+** or the check is **not eligible** (red). Missing key, API errors, unknown profiles, or network level below **30** block eligibility. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, “applying below current ladder”) can yield **eligible with warnings** (amber). **Known alts** are not included in the public embed; the runner gets an **ephemeral** follow-up with alt details only. Full pass (green) assigns the applicant role when configured (including when the only extra context was alts).
+- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**. When the API **succeeds**, players must be **network level 30+** with a real profile or the check is **not eligible** (red). When the API **fails** (HTTP errors, rate limits, missing key, bad JSON, etc.), **Hypixel is not enforced** for that run — pass/fail follows only the other rules below, and an embed field tells staff to use **`/hypixel`** to verify level manually. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, “applying below current ladder”) can yield **eligible with warnings** (amber). **Known alts** are not included in the public embed; the runner gets an **ephemeral** follow-up with alt details only. Full pass (green) assigns the applicant role when configured (including when the only extra context was alts).
+
+### `/hypixel`
+
+- **Description**: Staff-only lookup of **Hypixel network level** for an IGN or UUID (same API as `/check`).
+- **Default permission**: Manage Roles (**Staff+**).
+- **Options**: `ign` (string, required) — Minecraft IGN, or UUID when longer than 16 characters.
+- **Behavior**: Ephemeral reply. Uses `HYPIXEL_API_KEY` and shows calculated network level, “no profile”, or the API error text.
 
 ### `/deny`
 
