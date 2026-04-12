@@ -46,10 +46,33 @@ module.exports = function coreCommands(ctx) {
     const discordUser = interaction.options.getUser('discord', true);
     const discord = discordUser.id;
     const rankType = interaction.options.getString('rank-type');
-    const applyLadderLetter = rankType.charAt(0).toUpperCase(); // P | E | A
+    const isPmCheck = String(rankType || '').toLowerCase() === 'pm';
+    /** P | E | A; null for PM (no tier ladder rules). */
+    const applyLadderLetter = isPmCheck ? null : rankType.charAt(0).toUpperCase();
+    const rankLabel = isPmCheck ? 'PM' : rankType.charAt(0).toUpperCase() + rankType.slice(1);
 
     const hypixelKey = process.env.HYPIXEL_API_KEY;
-    const [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
+    let blacklistRows;
+    let adminBlacklistRows;
+    let altRows;
+    let allTierRows;
+    let hypixelResult;
+
+    if (isPmCheck) {
+      [blacklistRows, adminBlacklistRows, altRows] = await Promise.all([
+        pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
+        pool.query(
+          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
+          [ign]
+        ),
+        pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
+          ign,
+        ]),
+      ]);
+      allTierRows = { rows: [] };
+      hypixelResult = { ok: true, pmSkip: true };
+    } else {
+      [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
         pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
         pool.query(
           'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
@@ -67,45 +90,50 @@ module.exports = function coreCommands(ctx) {
         ),
         fetchNetworkLevelForCheck(hypixelKey, ign),
       ]);
+    }
 
     let denialRows = { rows: [] };
-    try {
-      denialRows = await pool.query(
-        `SELECT * FROM application_denials
+    if (!isPmCheck) {
+      try {
+        denialRows = await pool.query(
+          `SELECT * FROM application_denials
          WHERE discord_id = $1 AND cooldown_until > NOW()
          ORDER BY cooldown_until DESC
          LIMIT 1`,
-        [discord]
-      );
-    } catch (e) {
-      if (e && e.code !== '42P01') throw e;
+          [discord]
+        );
+      } catch (e) {
+        if (e && e.code !== '42P01') throw e;
+      }
     }
 
     const embed = new EmbedBuilder().setTitle(`Check: ${ign}`).setTimestamp();
     let eligible = true;
     const issues = [];
 
-    /** API/config failures: do not block eligibility; staff verify with `/hypixel`. */
+    /** API/config failures: do not block eligibility; staff verify with `/hypixel`. PM checks skip Hypixel entirely. */
     let hypixelDegradedNote = '';
-    if (!hypixelResult.ok) {
-      const detail =
-        hypixelResult.message.length > 500
-          ? `${hypixelResult.message.slice(0, 497)}…`
-          : hypixelResult.message;
-      hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Use **\`/hypixel\`** to check manually before tryout.`;
-    } else if (hypixelResult.level < 30) {
-      eligible = false;
-      if (!hypixelResult.hasPlayer) {
-        issues.push(
-          '📊 **Hypixel network level** — no Hypixel profile for this name/UUID (never joined, or invalid). ' +
-            'They must be **network level 30** or higher.'
-        );
-      } else {
-        issues.push(
-          `📊 **Hypixel network level too low** — **${hypixelResult.level.toFixed(
-            2
-          )}** (minimum **30**).`
-        );
+    if (!isPmCheck) {
+      if (!hypixelResult.ok) {
+        const detail =
+          hypixelResult.message.length > 500
+            ? `${hypixelResult.message.slice(0, 497)}…`
+            : hypixelResult.message;
+        hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Use **\`/hypixel\`** to check manually before tryout.`;
+      } else if (hypixelResult.level < 30) {
+        eligible = false;
+        if (!hypixelResult.hasPlayer) {
+          issues.push(
+            '📊 **Hypixel network level** — no Hypixel profile for this name/UUID (never joined, or invalid). ' +
+              'They must be **network level 30** or higher.'
+          );
+        } else {
+          issues.push(
+            `📊 **Hypixel network level too low** — **${hypixelResult.level.toFixed(
+              2
+            )}** (minimum **30**).`
+          );
+        }
       }
     }
 
@@ -127,7 +155,7 @@ module.exports = function coreCommands(ctx) {
       issues.push(`🚫 **Admin Blacklisted** — ${abl.reason}`);
     }
 
-    if (denialRows.rows.length > 0) {
+    if (!isPmCheck && denialRows.rows.length > 0) {
       eligible = false;
       const d = denialRows.rows[0];
       const ts = Math.floor(new Date(d.cooldown_until).getTime() / 1000);
@@ -141,7 +169,7 @@ module.exports = function coreCommands(ctx) {
     }
 
     /** Apex: need Elite or Apex on file (re-apply). Prime-only or unranked cannot apply for Apex. */
-    if (applyLadderLetter === 'A' && !latestByLadder['E'] && !latestByLadder['A']) {
+    if (!isPmCheck && applyLadderLetter === 'A' && !latestByLadder['E'] && !latestByLadder['A']) {
       eligible = false;
       issues.push(
         '🔼 **Apex tryout** — need **Elite** or **Apex** tier on file. **Prime** or **no tier** cannot apply for Apex (use Prime or Elite first).'
@@ -223,7 +251,7 @@ module.exports = function coreCommands(ctx) {
     }
 
     if (passedCheck) {
-      const ok = `✅ **${ign} is eligible** for ${rankType} tryout.\nNo issues found.${roleNote}`;
+      const ok = `✅ **${ign} is eligible** for ${rankLabel} tryout.\nNo issues found.${roleNote}`;
       if (roleNote) {
         embed.setColor(0xffa000);
         embed.setDescription(ok);
@@ -233,14 +261,16 @@ module.exports = function coreCommands(ctx) {
       }
     } else if (!eligible) {
       embed.setColor(0xff1744);
-      embed.setDescription(`❌ **${ign} is NOT eligible** for ${rankType} tryout.\n\n${issues.join('\n\n')}`);
+      embed.setDescription(`❌ **${ign} is NOT eligible** for ${rankLabel} tryout.\n\n${issues.join('\n\n')}`);
     } else {
       embed.setColor(0xffa000);
       embed.setDescription(`⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}`);
     }
 
     let hypixelLevelField;
-    if (hypixelDegradedNote) {
+    if (isPmCheck) {
+      hypixelLevelField = '— *(not required for PM)*';
+    } else if (hypixelDegradedNote) {
       hypixelLevelField = '— *(not fetched)*';
     } else if (!hypixelResult.hasPlayer) {
       hypixelLevelField = '— *(no Hypixel profile)*';
@@ -670,7 +700,8 @@ module.exports = function coreCommands(ctx) {
           .addChoices(
             { name: 'Prime', value: 'prime' },
             { name: 'Elite', value: 'elite' },
-            { name: 'Apex', value: 'apex' }
+            { name: 'Apex', value: 'apex' },
+            { name: 'PM', value: 'pm' }
           )
       ),
 
