@@ -41,10 +41,10 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 - **Description**: Check if a player is eligible for a tryout/application for a given rank ladder.
 - **Default permission**: Manage Roles (bot also requires **Staff+**).
 - **Options**:
-  - `ign` (string, required) — Minecraft IGN.
+  - `ign` (string, required) — Minecraft IGN, or **UUID** when the value is longer than 16 characters (passed to Hypixel as `name` vs `uuid`).
   - `discord` (user, required) — linked Discord account (cooldown + applicant role).
   - `rank-type` (choice, required) — `Prime` | `Elite` | `Apex` (must match the ladder you’re checking).
-- **Behavior**: Queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, alts, “applying below current ladder”) can yield **eligible with warnings** (amber). Full pass (green) assigns the applicant role when configured.
+- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**; players must be **network level 30+** or the check is **not eligible** (red). Missing key, API errors, unknown profiles, or network level below **30** block eligibility. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, alts, “applying below current ladder”) can yield **eligible with warnings** (amber). Full pass (green) assigns the applicant role when configured.
 
 ### `/deny`
 
@@ -490,6 +490,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 | `PUNISHMENT_STAFF_ROLE_ID` or `STAFF_PING_ROLE_ID` | Role to @mention on cooldown expiry |
 | `HELP_STAFF_ROLE_ID`, `HELP_CHANNEL_ID` | `/help` mentions |
 | `CHECK_LEVELBOT_MESSAGE`, `CHECK_LEVELBOT_WHEN` | Optional extra channel message after `/check` (`always` / `pass` / `fail`) |
+| `HYPIXEL_API_KEY` | Hypixel API key for `/check` network level (30+) verification |
 | `BOT_SHOW_ERRORS` | Include error detail in generic failure message |
 
 ---

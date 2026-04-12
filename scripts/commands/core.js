@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 const { syncTierListChannel } = require('../lib/tierListChannelSync');
+const { fetchNetworkLevelForCheck } = require('../lib/hypixel');
 
 module.exports = function coreCommands(ctx) {
   const {
@@ -51,27 +52,30 @@ module.exports = function coreCommands(ctx) {
     const LADDER_ORDER = { P: 0, E: 1, A: 2 };
     const LADDER_NAME = { P: 'Prime', E: 'Elite', A: 'Apex' };
 
-    const [blacklistRows, adminBlacklistRows, timeoutRows, altRows, allTierRows] = await Promise.all([
-      pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
-      pool.query(
-        'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
-        [ign]
-      ),
-      pool.query(
-        'SELECT * FROM timeouts WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 1',
-        [ign]
-      ),
-      pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
-        ign,
-      ]),
-      pool.query(
-        `SELECT DISTINCT ON (type) type, tier, created_at
+    const hypixelKey = process.env.HYPIXEL_API_KEY;
+    const [blacklistRows, adminBlacklistRows, timeoutRows, altRows, allTierRows, hypixelResult] =
+      await Promise.all([
+        pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
+        pool.query(
+          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
+          [ign]
+        ),
+        pool.query(
+          'SELECT * FROM timeouts WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 1',
+          [ign]
+        ),
+        pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
+          ign,
+        ]),
+        pool.query(
+          `SELECT DISTINCT ON (type) type, tier, created_at
          FROM tier_results
          WHERE LOWER(ign) = $1 AND type IN ('P','E','A')
          ORDER BY type, id DESC`,
-        [ign]
-      ),
-    ]);
+          [ign]
+        ),
+        fetchNetworkLevelForCheck(hypixelKey, ign),
+      ]);
 
     let denialRows = { rows: [] };
     try {
@@ -87,6 +91,25 @@ module.exports = function coreCommands(ctx) {
     const embed = new EmbedBuilder().setTitle(`Check: ${ign}`).setTimestamp();
     let eligible = true;
     const issues = [];
+
+    if (!hypixelResult.ok) {
+      eligible = false;
+      issues.push(`📡 ${hypixelResult.message}`);
+    } else if (hypixelResult.level < 30) {
+      eligible = false;
+      if (!hypixelResult.hasPlayer) {
+        issues.push(
+          '📊 **Hypixel network level** — no Hypixel profile for this name/UUID (never joined, or invalid). ' +
+            'They must be **network level 30** or higher.'
+        );
+      } else {
+        issues.push(
+          `📊 **Hypixel network level too low** — **${hypixelResult.level.toFixed(
+            2
+          )}** (minimum **30**).`
+        );
+      }
+    }
 
     if (isBlacklisted(blacklistRows.rows)) {
       eligible = false;
@@ -619,7 +642,12 @@ module.exports = function coreCommands(ctx) {
     new SlashCommandBuilder()
       .setName('check')
       .setDescription('Check player eligibility for applications')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('ign')
+          .setDescription('Minecraft IGN, or UUID if longer than 16 characters')
+          .setRequired(true)
+      )
       .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
       .addStringOption((o) =>
         o

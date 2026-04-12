@@ -58,6 +58,11 @@ client.once(Events.ClientReady, async () => {
   } else if (applicantId) {
     console.log(`✅ Applicant role: id(s) configured (${applicantId.split(',').length} segment(s))`);
   }
+  if (!process.env.HYPIXEL_API_KEY?.trim()) {
+    console.warn(
+      '⚠️ HYPIXEL_API_KEY is unset — /check will mark everyone not eligible until Hypixel verification is configured.'
+    );
+  }
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
   const body = commands.map((c) => c.toJSON());
   const guildId = process.env.GUILD_ID?.trim();
