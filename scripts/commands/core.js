@@ -5,6 +5,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } = require('discord.js');
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 const { syncTierListChannel } = require('../lib/tierListChannelSync');
@@ -168,12 +169,14 @@ module.exports = function coreCommands(ctx) {
       );
     }
 
+    /** Alts are never shown on the public reply — staff-only ephemeral follow-up. */
+    let altStaffMessage = '';
     if (altRows.rows.length > 0) {
       const altList = altRows.rows.map((a) => `\`${a.original_ign}\` → \`${a.alt_ign}\``).join('\n');
-      issues.push(`🔀 **Known alts:**\n${altList}`);
+      altStaffMessage = `🔀 **Staff only — known alts on file for \`${ign}\`:**\n${altList}`;
     }
 
-    /** Full pass: no hard blocks and no notes (timeouts, already ranked, alts, etc.). Applicant role only here. */
+    /** Full pass: no hard blocks and no public notes (timeouts, ladder mismatch, etc.). Applicant role only here. */
     const passedCheck = eligible && issues.length === 0;
 
     let roleNote = '';
@@ -267,6 +270,14 @@ module.exports = function coreCommands(ctx) {
     if (headUrl) embed.setThumbnail(headUrl);
 
     await interaction.editReply({ embeds: [embed] });
+
+    if (altStaffMessage) {
+      let content = altStaffMessage;
+      if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
+      await interaction
+        .followUp({ content, flags: MessageFlags.Ephemeral })
+        .catch((e) => console.warn('check: alt staff followUp failed:', e.message));
+    }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
     if (interaction.channel?.isTextBased?.() && process.env.CHECK_LEVELBOT_MESSAGE?.trim()) {
