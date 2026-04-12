@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
@@ -15,7 +15,6 @@ module.exports = function applicationsCommands(ctx) {
     parseRoleIdList,
     resolveGuildMember,
   } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   /** Remove configured applicant role(s) from a guild member (same logic as /deny). */
   async function removeApplicantRole(guild, member) {
@@ -50,8 +49,8 @@ module.exports = function applicationsCommands(ctx) {
 
   async function handleClearcooldown(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const discordUser = interaction.options.getUser('discord', true);
     const r = await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [
@@ -185,8 +184,7 @@ module.exports = function applicationsCommands(ctx) {
         .setDescription('Remove application tryout cooldown (undo a mistaken /deny)')
         .addUserOption((o) =>
           o.setName('discord').setDescription('Discord user').setRequired(true)
-        )
-        .setDefaultMemberPermissions(mgr),
+        ),
       new SlashCommandBuilder()
         .setName('deny')
         .setDescription('Deny an application: remove applicant role and set tryout cooldown')
@@ -202,8 +200,7 @@ module.exports = function applicationsCommands(ctx) {
               { name: 'Elite (2 weeks)', value: 'elite' },
               { name: 'Apex (3 weeks)', value: 'apex' }
             )
-        )
-        .setDefaultMemberPermissions(mgr),
+        ),
       new SlashCommandBuilder()
         .setName('accept')
         .setDescription('Accept an applicant: remove applicant role and notify managers')
@@ -222,8 +219,7 @@ module.exports = function applicationsCommands(ctx) {
         )
         .addStringOption((o) =>
           o.setName('win-fraction').setDescription('Optional, e.g. 14/20').setRequired(false)
-        )
-        .setDefaultMemberPermissions(mgr),
+        ),
     ],
     handlers: { clearcooldown: handleClearcooldown, deny: handleDeny, accept: handleAccept },
   };

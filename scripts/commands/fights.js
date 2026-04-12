@@ -3,7 +3,6 @@ const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/figh
 
 module.exports = function fightsCommands(ctx) {
   const { pool, isAdminOrOwner, requireLevel, defer, normalizeIgn } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleUpdatescore(interaction) {
     await defer(interaction, false);
@@ -48,8 +47,8 @@ module.exports = function fightsCommands(ctx) {
 
   async function handleVoidscore(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const id = interaction.options.getInteger('id');
     const q = await pool.query(
@@ -116,8 +115,7 @@ module.exports = function fightsCommands(ctx) {
           .setName('id')
           .setDescription('Fight ID from /score (scores.id)')
           .setRequired(true)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
   ];
 
   return {

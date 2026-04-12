@@ -1,7 +1,6 @@
 const {
   SlashCommandBuilder,
   EmbedBuilder,
-  PermissionFlagsBits,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -603,7 +602,6 @@ module.exports = function coreCommands(ctx) {
         '`/deny`',
         '`/accept`',
         '`/score`',
-        '`/blacklist`',
         '`/log` (→ manager queue)',
         '`/history`',
         '`/report`',
@@ -615,10 +613,8 @@ module.exports = function coreCommands(ctx) {
         '`/deletealt`',
         '`/clearalt`',
         '`/whitelist`',
-        '`/update` (IGN)',
         '`/totalhistory`',
         '`/boosterpuncheck`',
-        '`/acceptreport`',
       ]);
     }
     if (lv >= 3) {
@@ -633,6 +629,14 @@ module.exports = function coreCommands(ctx) {
         '`/checkqueue`',
         '`/getproof`',
         '`/removepunishment`',
+        '`/blacklist`',
+        '`/adminblacklist`',
+        '`/update` (IGN rename)',
+        '`/acceptreport`',
+        '`/clearcooldown`',
+        '`/addpm`',
+        '`/editpm`',
+        '`/voidscore`',
       ]);
     }
     if (lv >= 4) {
@@ -645,7 +649,6 @@ module.exports = function coreCommands(ctx) {
         '`/roleblacklist`',
         '`/viewroleblacklist`',
         '`/updatescore`',
-        '`/adminblacklist`',
       ]);
     }
     if (ctx.isOwner(interaction.user.id)) {
@@ -768,8 +771,7 @@ module.exports = function coreCommands(ctx) {
           .setRequired(true)
           .addChoices(...VALID_TIERS.map((t) => ({ name: t, value: t })))
       )
-      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
 
     new SlashCommandBuilder()
       .setName('checkcommands')

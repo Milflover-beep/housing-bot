@@ -65,6 +65,12 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `type` (choice, required) — `Prime (1 week)` | `Elite (2 weeks)` | `Apex (3 weeks)` — sets cooldown length.
 - **Behavior**: Upserts `application_denials` for `(discord_id, rank_type)`. Removes role named `BOT_ROLE_APPLICANT_NAME`. Must be used **in a server** (needs guild + member).
 
+### `/clearcooldown`
+
+- **Description**: Deletes the active `application_denials` row for a Discord user (clears tryout cooldown after a mistaken `/deny`).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
+- **Options**: `discord` (user, required)
+
 ---
 
 ## Fights & scores
@@ -101,7 +107,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 ### `/voidscore`
 
 - **Description**: Mark a fight as voided (`is_voided = true`) — excluded from stats; row **remains** in the DB.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
 - **Options**:
   - `id` (integer, required) — `scores.id`.
 
@@ -193,7 +199,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/blacklist`
 
 - **Description**: Add a row to `blacklists`.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (`BOT_ROLE_MANAGER_ID` / level 3).
 - **Options**:
   - `ign`, `reason` (required)
   - `duration` (optional) — e.g. `7d`, `24h`, `permanent`; blank = permanent.
@@ -207,7 +213,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/adminblacklist`
 
 - **Description**: View `admin_blacklists` (optionally filter by IGN).
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
 - **Options**: `ign` (optional)
 
 ### `/pardon`
@@ -233,7 +239,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/acceptreport`
 
 - **Description**: Update a report row by id.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
 - **Options**:
   - `id` (integer, required) — `reports.id`
   - `reason` (string, required)
@@ -302,7 +308,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/addpm`
 
 - **Description**: Add a PM row.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
 - **Options**:
   - `ign` (required)
   - `manager-type` (optional) — Prime | Elite | Apex | N/A
@@ -311,7 +317,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/editpm`
 
 - **Description**: Update ping and/or manager type by IGN.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
 - **Options**:
   - `ign` (required)
   - `ping` (optional)
@@ -442,7 +448,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/update`
 
 - **Description**: Rename an IGN across many tables (blacklists, scores, tiers, PM list, `application_denials`, etc.) in one transaction.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
 - **Options**: `old-ign`, `new-ign` (required)
 
 ### `/find`

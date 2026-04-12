@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { fetchNetworkLevelForCheck } = require('../lib/hypixel');
 
 module.exports = function hypixelSlash(ctx) {
@@ -39,8 +39,7 @@ module.exports = function hypixelSlash(ctx) {
             .setName('ign')
             .setDescription('Minecraft IGN, or UUID if longer than 16 characters')
             .setRequired(true)
-        )
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+        ),
     ],
     handlers: { hypixel: handleHypixel },
   };

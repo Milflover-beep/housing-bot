@@ -1,8 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function reportsCommands(ctx) {
   const { pool, requireLevel, defer, normalizeIgn } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleReport(interaction) {
     await defer(interaction, true);
@@ -49,8 +48,8 @@ module.exports = function reportsCommands(ctx) {
 
   async function handleAcceptreport(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const id = interaction.options.getInteger('id');
     const reason = interaction.options.getString('reason');
@@ -74,8 +73,7 @@ module.exports = function reportsCommands(ctx) {
     new SlashCommandBuilder()
       .setName('bancheck')
       .setDescription('View reports for a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('acceptreport')
       .setDescription('Accept a player report with reason and punishment status')
@@ -83,8 +81,7 @@ module.exports = function reportsCommands(ctx) {
       .addStringOption((o) => o.setName('reason').setDescription('Staff reason / note').setRequired(true))
       .addBooleanOption((o) =>
         o.setName('punishment-issued').setDescription('Punishment issued?').setRequired(true)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
   ];
 
   return {

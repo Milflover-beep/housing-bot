@@ -86,8 +86,7 @@ module.exports = function watchlistCommands(ctx) {
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
       .setName('viewwatchlist')
-      .setDescription('View all players on the watchlist (Manager+)')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+      .setDescription('View all players on the watchlist (Manager+)'),
   ];
 
   return {

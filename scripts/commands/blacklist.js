@@ -2,12 +2,11 @@ const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('disc
 
 module.exports = function blacklistCommands(ctx) {
   const { pool, requireLevel, isAdminOrOwner, parseDurationToDate, defer, normalizeIgn } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleBlacklist(interaction) {
     await defer(interaction, true);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const reason = interaction.options.getString('reason');
@@ -77,8 +76,8 @@ module.exports = function blacklistCommands(ctx) {
 
   async function handleAdminblacklist(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const ignOpt = interaction.options.getString('ign');
     const q = ignOpt
@@ -114,8 +113,7 @@ module.exports = function blacklistCommands(ctx) {
           .setName('duration')
           .setDescription('e.g. 7d, 30d, permanent')
           .setRequired(false)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('pardon')
       .setDescription('Pardon a specific blacklist entry')
@@ -134,15 +132,13 @@ module.exports = function blacklistCommands(ctx) {
     new SlashCommandBuilder()
       .setName('viewblacklist')
       .setDescription('View blacklist history for a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('adminblacklist')
       .setDescription('View admin blacklist records with IDs')
       .addStringOption((o) =>
         o.setName('ign').setDescription('Filter by IGN (optional)').setRequired(false)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
   ];
 
   return {

@@ -1,8 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function altsCommands(ctx) {
   const { pool, requireLevel, defer, normalizeIgn } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleAddalt(interaction) {
     await defer(interaction, true);
@@ -124,27 +123,23 @@ module.exports = function altsCommands(ctx) {
       .addStringOption((o) =>
         o.setName('original-ign').setDescription('Original IGN').setRequired(true)
       )
-      .addStringOption((o) => o.setName('alt-ign').setDescription('Alt IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('alt-ign').setDescription('Alt IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('viewalts')
       .setDescription('View all alt IGNs associated with a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('deletealt')
       .setDescription('Delete one alt link by database id (see /viewalts)')
       .addIntegerOption((o) =>
         o.setName('id').setDescription('alts.id from /viewalts').setRequired(true)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('clearalt')
       .setDescription('Clear all alt relationships for an original IGN')
       .addStringOption((o) =>
         o.setName('original-ign').setDescription('Original IGN').setRequired(true)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('editalt')
       .setDescription('Edit an original IGN or specific alt IGN')
@@ -154,16 +149,14 @@ module.exports = function altsCommands(ctx) {
       )
       .addStringOption((o) =>
         o.setName('new-alt-ign').setDescription('New alt (optional)').setRequired(false)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('whitelist')
       .setDescription('Set whitelist status for an IGN to control visibility in viewalts')
       .addStringOption((o) => o.setName('ign').setDescription('Original IGN').setRequired(true))
       .addBooleanOption((o) =>
         o.setName('whitelisted').setDescription('Whitelisted?').setRequired(true)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
   ];
 
   return {

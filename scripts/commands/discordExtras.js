@@ -1,8 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function discordExtrasCommands(ctx) {
   const { pool, requireLevel, defer } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleRevokeargument(interaction) {
     await defer(interaction, false);
@@ -39,12 +38,10 @@ module.exports = function discordExtrasCommands(ctx) {
     new SlashCommandBuilder()
       .setName('revokeargument')
       .setDescription('Revoke argument privileges for a user for 10 minutes')
-      .addUserOption((o) => o.setName('user').setDescription('User').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addUserOption((o) => o.setName('user').setDescription('User').setRequired(true)),
     new SlashCommandBuilder()
       .setName('gradientrequests')
-      .setDescription('View pending gradient role requests')
-      .setDefaultMemberPermissions(mgr),
+      .setDescription('View pending gradient role requests'),
   ];
 
   return {

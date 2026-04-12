@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { syncTierListChannel, getTierListChannelId } = require('../lib/tierListChannelSync');
 
 module.exports = function tierCommands(ctx) {
@@ -204,8 +204,6 @@ module.exports = function tierCommands(ctx) {
     await interaction.editReply({ content: `✅ Tier list (Prime + Elite + Apex) reposted in <#${channelId}>.` });
   }
 
-  const mgr = PermissionFlagsBits.ManageRoles;
-
   const commands = [
     new SlashCommandBuilder()
       .setName('primerate')
@@ -214,8 +212,7 @@ module.exports = function tierCommands(ctx) {
       .addStringOption((o) =>
         o.setName('tier').setDescription('Tier').setRequired(true)
       )
-      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
     new SlashCommandBuilder()
       .setName('eliterate')
       .setDescription('Submit an Elite tier rating')
@@ -223,8 +220,7 @@ module.exports = function tierCommands(ctx) {
       .addStringOption((o) =>
         o.setName('tier').setDescription('Tier').setRequired(true)
       )
-      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
     new SlashCommandBuilder()
       .setName('apexrate')
       .setDescription('Submit an Apex tier rating')
@@ -232,8 +228,7 @@ module.exports = function tierCommands(ctx) {
       .addStringOption((o) =>
         o.setName('tier').setDescription('Tier').setRequired(true)
       )
-      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
     new SlashCommandBuilder()
       .setName('viewtier')
       .setDescription('View the tier result for a specific player (PM rank and higher)')
@@ -252,13 +247,11 @@ module.exports = function tierCommands(ctx) {
             { name: 'Elite', value: 'elite' },
             { name: 'Apex', value: 'apex' }
           )
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('tierids')
       .setDescription('View all database IDs for a player tier entries (Manager+ only)')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('tierlist')
       .setDescription('View the tier list for a specific fight type (Booster rank and higher)')

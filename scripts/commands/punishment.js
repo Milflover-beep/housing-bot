@@ -1,7 +1,6 @@
 const {
   SlashCommandBuilder,
   EmbedBuilder,
-  PermissionFlagsBits,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -17,7 +16,6 @@ module.exports = function punishmentCommands(ctx) {
     parseCooldownToMs,
     formatEvidencePlainUrls,
   } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function getQueueRow(queueId) {
     const q = await pool.query('SELECT * FROM punishment_queue WHERE id = $1', [queueId]);
@@ -484,25 +482,21 @@ module.exports = function punishmentCommands(ctx) {
           .setName('cooldown')
           .setDescription('d=days h=hours m=minutes — ping @staff when time is up for unban (e.g. 1d, 12h, 1m)')
           .setRequired(false)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('history')
       .setDescription('View punishment and blacklist history for a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('getproof')
       .setDescription('View evidence and details for punishments of a player (Manager+)')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('totalhistory')
-      .setDescription('View all punishments by status (Staff only)')
-      .setDefaultMemberPermissions(mgr),
+      .setDescription('View all punishments by status (Staff only)'),
     new SlashCommandBuilder()
       .setName('boosterpuncheck')
-      .setDescription('View active (manager-approved) punishments')
-      .setDefaultMemberPermissions(mgr),
+      .setDescription('View active (manager-approved) punishments'),
     new SlashCommandBuilder()
       .setName('checkqueue')
       .setDescription('Review punishment queue from /log — paged proof, Accept / Deny (Manager+)'),
@@ -515,8 +509,7 @@ module.exports = function punishmentCommands(ctx) {
           .setDescription('Punishment log id from /history (e.g. Punishment #42 → 42)')
           .setRequired(true)
           .setMinValue(1)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
   ];
 
   return {

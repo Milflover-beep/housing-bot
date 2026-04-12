@@ -11,7 +11,6 @@ module.exports = function pmCommands(ctx) {
     minecraftHeadUrl,
     clampSideScoreForStats,
   } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   const PM_MANAGER_CHOICES = [
     { name: 'Prime Manager', value: 'P' },
@@ -247,10 +246,10 @@ module.exports = function pmCommands(ctx) {
   async function handleAddpm(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 2)) {
+    if (!requireLevel(member, 3)) {
       return interaction.editReply({
         content:
-          '❌ Staff or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+          '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
@@ -312,10 +311,10 @@ module.exports = function pmCommands(ctx) {
   async function handleEditpm(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 2)) {
+    if (!requireLevel(member, 3)) {
       return interaction.editReply({
         content:
-          '❌ Staff or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+          '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
@@ -451,8 +450,7 @@ module.exports = function pmCommands(ctx) {
       .addIntegerOption((o) =>
         o.setName('ping').setDescription('Ping ms (optional)').setRequired(false)
       )
-      .addStringOption((o) => o.setName('uuid').setDescription('UUID (optional)').setRequired(false))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('uuid').setDescription('UUID (optional)').setRequired(false)),
     new SlashCommandBuilder()
       .setName('deletepm')
       .setDescription('Delete a PM from the list by Minecraft IGN (Admin Only)')
@@ -473,8 +471,7 @@ module.exports = function pmCommands(ctx) {
           .setDescription('Prime / Elite / Apex / N/A (optional if updating ping)')
           .setRequired(false)
           .addChoices(...PM_MANAGER_CHOICES)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
     new SlashCommandBuilder()
       .setName('pmstats')
       .setDescription('Fight stats for one PM (wins, losses, win rate)')
@@ -492,8 +489,7 @@ module.exports = function pmCommands(ctx) {
           .setName('debug')
           .setDescription('Staff+: margins, streaks, per-ladder W/L, score averages (ephemeral)')
           .setRequired(false)
-      )
-      .setDefaultMemberPermissions(mgr),
+      ),
   ];
 
   return {

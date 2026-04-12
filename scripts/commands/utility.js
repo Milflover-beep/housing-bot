@@ -1,13 +1,12 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function utilityCommands(ctx) {
   const { pool, requireLevel, isOwner, defer, normalizeIgn } = ctx;
-  const mgr = PermissionFlagsBits.ManageRoles;
 
   async function handleUpdate(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const oldIgn = normalizeIgn(interaction.options.getString('old-ign'));
     const newIgn = normalizeIgn(interaction.options.getString('new-ign'));
@@ -112,8 +111,7 @@ module.exports = function utilityCommands(ctx) {
       .setName('update')
       .setDescription('Update IGN across all database tables')
       .addStringOption((o) => o.setName('old-ign').setDescription('Current IGN').setRequired(true))
-      .addStringOption((o) => o.setName('new-ign').setDescription('New IGN').setRequired(true))
-      .setDefaultMemberPermissions(mgr),
+      .addStringOption((o) => o.setName('new-ign').setDescription('New IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('find')
       .setDescription('Search a database table for IGN entries (Bot Owner Only)')
