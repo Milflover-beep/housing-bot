@@ -1,5 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
-const { tierRank, tierResultsLadderSqlParam, tierListExcludePmManagerSql } = require('./helpers');
+const { tierRank, tierResultsLadderSqlParam } = require('./helpers');
+
+/** Tier lists use only `tier_results` (seed from database_export.xlsx `tier_results` sheet + bot ratings). Not pm_list. */
 
 const DEFAULT_TIERLIST_CHANNEL_ID = '1472779161352274076';
 
@@ -23,12 +25,12 @@ function typeLetterToName(letter) {
   return m[letter] || letter;
 }
 
-/** Latest row per IGN within a ladder; omits PM staff for that ladder (see pm_list.manager_type). */
+/** Latest row per IGN per ladder; ignores empty tier text. */
 function selectCurrentTierRowsSql() {
   return `SELECT DISTINCT ON (LOWER(tr.ign)) tr.ign, tr.tier
           FROM tier_results tr
           WHERE ${tierResultsLadderSqlParam('tr')}
-            AND ${tierListExcludePmManagerSql('tr', 'pm')}
+            AND COALESCE(TRIM(tr.tier), '') <> ''
           ORDER BY LOWER(tr.ign), tr.id DESC`;
 }
 
@@ -53,10 +55,8 @@ const BUCKET_EMOJI = {
   D: '⬛',
 };
 
-/**
- * Markdown layout: yaml blocks per S/A/B/C/D bucket.
- */
-function buildTierListEmbedDescription(rows, typeName) {
+/** Markdown: S/A/B/C/D buckets, yaml lists — no extra prose (ladder name is embed title). */
+function buildTierListEmbedDescription(rows) {
   const buckets = { S: [], A: [], B: [], C: [], D: [] };
   for (const r of rows) {
     const b = tierToBucket(r.tier);
@@ -71,20 +71,20 @@ function buildTierListEmbedDescription(rows, typeName) {
     });
   }
 
-  const lines = [`_${String(typeName)} ladder — grade buckets below._`, ''];
+  const lines = [];
   let hasAny = false;
   for (const b of order) {
     const list = buckets[b];
     if (!list.length) continue;
     hasAny = true;
-    lines.push(`${BUCKET_EMOJI[b]} ${b} TIER (${list.length})`);
+    lines.push(`${BUCKET_EMOJI[b]} **${b}** (${list.length})`);
     lines.push('```yaml');
     lines.push(...list.map((r) => `- ${r.ign}`));
     lines.push('```');
     lines.push('');
   }
   if (!hasAny) {
-    lines.push('_No players on this tier list yet._');
+    lines.push('_No entries._');
   }
   return lines.join('\n').slice(0, 4096);
 }
@@ -97,7 +97,7 @@ async function buildCombinedEmbeds(pool) {
     const res = await pool.query(selectCurrentTierRowsSql(), [letter]);
     const rows = [...res.rows];
     const typeName = typeLetterToName(letter);
-    const desc = buildTierListEmbedDescription(rows, typeName);
+    const desc = buildTierListEmbedDescription(rows);
     embeds.push(
       new EmbedBuilder()
         .setTitle(`🏆 ${typeName} tier list`)

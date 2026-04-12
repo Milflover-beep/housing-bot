@@ -133,18 +133,6 @@ function tierResultsLadderSqlParam(alias = '') {
   )`;
 }
 
-/**
- * Exclude IGNs that are PM staff for the same ladder (pm_list.manager_type = P/E/A).
- * Stops tier lists from duplicating /pmlist manager sections. $1 = ladder letter.
- */
-function tierListExcludePmManagerSql(trAlias = 'tr', pmAlias = 'pm') {
-  return `NOT EXISTS (
-    SELECT 1 FROM pm_list ${pmAlias}
-    WHERE LOWER(TRIM(${pmAlias}.ign)) = LOWER(TRIM(${trAlias}.ign))
-      AND ${pmAlias}.manager_type = $1
-  )`;
-}
-
 /** HTTPS URL for a Minecraft helm render (embed thumbnail). Uses Minotar: /helm/{ign}/64.png */
 function minecraftHeadUrl(ign) {
   const raw = String(ign || '').trim();
@@ -168,5 +156,4 @@ module.exports = {
   getSlashSubcommand,
   resolveGuildMember,
   tierResultsLadderSqlParam,
-  tierListExcludePmManagerSql,
 };

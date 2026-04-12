@@ -14,7 +14,6 @@ module.exports = function tierCommands(ctx) {
     defer,
     normalizeIgn,
     tierResultsLadderSqlParam,
-    tierListExcludePmManagerSql,
   } = ctx;
 
   async function submitRating(interaction, fixedType) {
@@ -158,7 +157,7 @@ module.exports = function tierCommands(ctx) {
       `SELECT DISTINCT ON (LOWER(tr.ign)) tr.ign, tr.tier, tr.tester, tr.created_at
        FROM tier_results tr
        WHERE ${tierResultsLadderSqlParam('tr')}
-         AND ${tierListExcludePmManagerSql('tr', 'pm')}
+         AND COALESCE(TRIM(tr.tier), '') <> ''
        ORDER BY LOWER(tr.ign), tr.id DESC`,
       [letter]
     );
