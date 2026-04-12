@@ -120,6 +120,19 @@ function errorEmbed(title, body) {
   return new EmbedBuilder().setColor(0xed4245).setTitle(title).setDescription(body);
 }
 
+/**
+ * SQL WHERE fragment for tier_results ladder column `type`.
+ * Matches P/E/A plus legacy full words (prime, elite, apex) case-insensitively.
+ * Use with parameter $1 ∈ { 'P', 'E', 'A' }.
+ */
+function tierResultsLadderSqlParam() {
+  return `(
+    ($1::text = 'P' AND LOWER(TRIM(type)) IN ('p', 'prime')) OR
+    ($1::text = 'E' AND LOWER(TRIM(type)) IN ('e', 'elite')) OR
+    ($1::text = 'A' AND LOWER(TRIM(type)) IN ('a', 'apex'))
+  )`;
+}
+
 /** HTTPS URL for a Minecraft helm render (embed thumbnail). Uses Minotar: /helm/{ign}/64.png */
 function minecraftHeadUrl(ign) {
   const raw = String(ign || '').trim();
@@ -142,4 +155,5 @@ module.exports = {
   errorEmbed,
   getSlashSubcommand,
   resolveGuildMember,
+  tierResultsLadderSqlParam,
 };

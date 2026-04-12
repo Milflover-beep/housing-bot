@@ -101,7 +101,27 @@ async function ensureDatabaseSchema(pool) {
     `);
     await ensureApplicationDenials(client);
 
-    console.log('✅ Database schema OK (punishment_logs/queue, pm_list, application_denials)');
+    /** Coerce tier_results.type to single-letter P/E/A (legacy rows used prime/elite/apex words). */
+    await client.query(`
+      UPDATE tier_results SET type = 'P' WHERE LOWER(TRIM(type)) IN ('p', 'prime')
+    `).catch(() => {});
+    await client.query(`
+      UPDATE tier_results SET type = 'E' WHERE LOWER(TRIM(type)) IN ('e', 'elite')
+    `).catch(() => {});
+    await client.query(`
+      UPDATE tier_results SET type = 'A' WHERE LOWER(TRIM(type)) IN ('a', 'apex')
+    `).catch(() => {});
+    await client.query(`
+      DELETE FROM tier_results a
+      WHERE EXISTS (
+        SELECT 1 FROM tier_results b
+        WHERE LOWER(TRIM(a.ign)) = LOWER(TRIM(b.ign))
+          AND a.type IS NOT DISTINCT FROM b.type
+          AND a.id < b.id
+      )
+    `).catch(() => {});
+
+    console.log('✅ Database schema OK (punishment_logs/queue, pm_list, application_denials, tier_results)');
   } finally {
     client.release();
   }

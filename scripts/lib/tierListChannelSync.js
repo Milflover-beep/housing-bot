@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { tierRank } = require('./helpers');
+const { tierRank, tierResultsLadderSqlParam } = require('./helpers');
 
 const DEFAULT_TIERLIST_CHANNEL_ID = '1472779161352274076';
 
@@ -23,11 +23,11 @@ function typeLetterToName(letter) {
   return m[letter] || letter;
 }
 
-/** Latest row per IGN within a ladder (handles legacy duplicate rows). */
+/** Latest row per IGN within a ladder (handles legacy duplicate rows + legacy type strings). */
 function selectCurrentTierRowsSql() {
   return `SELECT DISTINCT ON (LOWER(ign)) ign, tier
           FROM tier_results
-          WHERE type = $1
+          WHERE ${tierResultsLadderSqlParam()}
           ORDER BY LOWER(ign), id DESC`;
 }
 
@@ -40,7 +40,7 @@ function tierToBucket(tier) {
   if (['A+', 'A', 'A-', 'HB'].includes(t)) return 'A';
   if (['B+', 'B', 'B-'].includes(t)) return 'B';
   if (['C+', 'C', 'C-'].includes(t)) return 'C';
-  if (['D', 'N/A'].includes(t)) return 'D';
+  if (['D', 'N/A', 'F'].includes(t)) return 'D';
   return null;
 }
 
@@ -70,7 +70,7 @@ function buildTierListEmbedDescription(rows, typeName) {
     });
   }
 
-  const lines = [`# 🏆 ${String(typeName).toUpperCase()} TIER LIST`, ''];
+  const lines = [`_${String(typeName)} ladder — grade buckets below._`, ''];
   let hasAny = false;
   for (const b of order) {
     const list = buckets[b];
@@ -97,7 +97,12 @@ async function buildCombinedEmbeds(pool) {
     const rows = [...res.rows];
     const typeName = typeLetterToName(letter);
     const desc = buildTierListEmbedDescription(rows, typeName);
-    embeds.push(new EmbedBuilder().setColor(LADDER_COLORS[letter] || 0x5865f2).setDescription(desc));
+    embeds.push(
+      new EmbedBuilder()
+        .setTitle(`🏆 ${typeName} tier list`)
+        .setColor(LADDER_COLORS[letter] || 0x5865f2)
+        .setDescription(desc)
+    );
   }
   return embeds;
 }

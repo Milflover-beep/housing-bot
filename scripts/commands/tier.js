@@ -13,6 +13,7 @@ module.exports = function tierCommands(ctx) {
     typeLetterToName,
     defer,
     normalizeIgn,
+    tierResultsLadderSqlParam,
   } = ctx;
 
   async function submitRating(interaction, fixedType) {
@@ -155,7 +156,7 @@ module.exports = function tierCommands(ctx) {
     const res = await pool.query(
       `SELECT DISTINCT ON (LOWER(ign)) ign, tier, tester, created_at
        FROM tier_results
-       WHERE type = $1
+       WHERE ${tierResultsLadderSqlParam()}
        ORDER BY LOWER(ign), id DESC`,
       [letter]
     );
@@ -164,11 +165,23 @@ module.exports = function tierCommands(ctx) {
     const body = rows.length
       ? rows.map((r) => `**${r.ign}** — ${r.tier}`).join('\n')
       : '_Empty._';
+    const MAX = 4096;
+    let desc = body;
+    let truncated = false;
+    if (body.length > MAX) {
+      truncated = true;
+      desc = `${body.slice(0, MAX - 40)}\n… _(truncated)_`;
+    }
     const embed = new EmbedBuilder()
       .setTitle(`${name} tier list`)
       .setColor(0x3498db)
-      .setDescription(body.slice(0, 3900))
+      .setDescription(desc)
       .setTimestamp();
+    if (truncated) {
+      embed.setFooter({
+        text: `${rows.length} players — list cut at Discord limit; lower grades sort last.`,
+      });
+    }
     await interaction.editReply({ embeds: [embed] });
   }
 
