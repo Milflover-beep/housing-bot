@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+    "start": "node src/index.js",
+    "seed": "node scripts/seed.js",
+    "db:reset": "node scripts/seed.js --reset"
+  }, 
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Milflover-beep/housing-bot.git"
