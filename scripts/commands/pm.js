@@ -44,9 +44,9 @@ module.exports = function pmCommands(ctx) {
       .setTitle('PM list')
       .setColor(0x1abc9c)
       .addFields(
-        { name: 'Prime Manager', value: section(buckets.P), inline: false },
-        { name: 'Elite Manager', value: section(buckets.E), inline: false },
         { name: 'Apex Manager', value: section(buckets.A), inline: false },
+        { name: 'Elite Manager', value: section(buckets.E), inline: false },
+        { name: 'Prime Manager', value: section(buckets.P), inline: false },
         { name: 'N/A', value: section(buckets.NA), inline: false }
       );
     await interaction.editReply({ embeds: [embed] });
@@ -92,7 +92,7 @@ module.exports = function pmCommands(ctx) {
   }
 
   async function handleDeletepm(interaction) {
-    await defer(interaction, true);
+    await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
     if (!isAdminOrOwner(member, interaction.user.id)) {
       return interaction.editReply({
