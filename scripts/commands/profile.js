@@ -1,6 +1,19 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const RECENT_FIGHTS = 7;
+const AVG_SCORE_FIGHT_CAP = 5000;
+
+/** `final_score` is winner–loser (e.g. `10-8`). */
+function parseFinalScore(str) {
+  const m = String(str ?? '')
+    .trim()
+    .match(/^(\d+)\s*[-–]\s*(\d+)$/);
+  if (!m) return null;
+  const a = parseInt(m[1], 10);
+  const b = parseInt(m[2], 10);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return { winnerPts: a, loserPts: b };
+}
 
 module.exports = function profileCommands(ctx) {
   const { pool, defer, normalizeIgn, typeLetterToName, minecraftHeadUrl } = ctx;
@@ -10,7 +23,7 @@ module.exports = function profileCommands(ctx) {
 
     const ign = normalizeIgn(interaction.options.getString('ign'));
 
-    const [tierNow, scoreAgg, scoreRecent, timeoutLatest, altCount, denialRow] = await Promise.all([
+    const [tierNow, scoreAgg, scoreRecent, scoreRowsAvg, timeoutLatest, denialRow] = await Promise.all([
       pool.query(
         `SELECT DISTINCT ON (type) type, tier
          FROM tier_results
@@ -36,13 +49,15 @@ module.exports = function profileCommands(ctx) {
         [ign, RECENT_FIGHTS]
       ),
       pool.query(
-        `SELECT timeout_duration, fight_type, created_at FROM timeouts
-         WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 1`,
-        [ign]
+        `SELECT final_score, winner_ign, loser_ign FROM scores s
+         WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1) AND s.is_voided = false
+         ORDER BY s.id DESC
+         LIMIT $2`,
+        [ign, AVG_SCORE_FIGHT_CAP]
       ),
       pool.query(
-        `SELECT COUNT(*)::int AS c FROM alts
-         WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1`,
+        `SELECT timeout_duration, fight_type, created_at FROM timeouts
+         WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 1`,
         [ign]
       ),
       pool
@@ -59,6 +74,18 @@ module.exports = function profileCommands(ctx) {
     const wins = s.wins || 0;
     const losses = s.losses || 0;
     const wr = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
+
+    const ptsList = [];
+    for (const row of scoreRowsAvg.rows) {
+      const parsed = parseFinalScore(row.final_score);
+      if (!parsed) continue;
+      const won = String(row.winner_ign || '').trim().toLowerCase() === ign;
+      ptsList.push(won ? parsed.winnerPts : parsed.loserPts);
+    }
+    const avgScore =
+      ptsList.length > 0
+        ? (ptsList.reduce((a, b) => a + b, 0) / ptsList.length).toFixed(2)
+        : null;
 
     const fightLines =
       total > 0 && scoreRecent.rows.length > 0
@@ -86,22 +113,16 @@ module.exports = function profileCommands(ctx) {
       })
       .join(' · ');
 
-    const altN = altCount.rows[0]?.c || 0;
-    const noteParts = [];
+    const onTryoutCooldown = Boolean(denialRow.rows?.length > 0);
+    const noteParts = [
+      `⏳ **Tryout cooldown (active now):** ${onTryoutCooldown ? '**Yes**' : '**No**'}`,
+    ];
     if (timeoutLatest.rows[0]) {
       const t = timeoutLatest.rows[0];
       noteParts.push(
         `⏱️ **Last timeout:** ${t.timeout_duration}${t.fight_type ? ` · ${t.fight_type}` : ''}`
       );
     }
-    if (altN > 0) noteParts.push(`🔀 **Alts on file:** ${altN}`);
-    if (denialRow.rows?.length > 0) {
-      const d = denialRow.rows[0];
-      const ts = Math.floor(new Date(d.cooldown_until).getTime() / 1000);
-      const rk = d.rank_type ? typeLetterToName(d.rank_type) : '?';
-      noteParts.push(`⏳ **Tryout cooldown** (${rk}) <t:${ts}:R>`);
-    }
-    if (!noteParts.length) noteParts.push('_No tryout cooldown, timeouts, or linked alts shown._');
 
     const embed = new EmbedBuilder()
       .setTitle(`📋 Profile: ${ign}`)
@@ -111,7 +132,11 @@ module.exports = function profileCommands(ctx) {
         { name: 'Current tiers', value: tierCompact, inline: false },
         { name: 'Wins', value: String(wins), inline: true },
         { name: 'Losses', value: String(losses), inline: true },
-        { name: 'Win rate', value: `${wr}%`, inline: true },
+        {
+          name: 'Win rate',
+          value: `${wr}%${avgScore != null ? ` · Avg **${avgScore}** pts/fight` : ''}`,
+          inline: true,
+        },
         { name: 'Total fights', value: String(total), inline: true },
         { name: 'At a glance', value: noteParts.join('\n').slice(0, 1024), inline: false }
       )
@@ -127,7 +152,7 @@ module.exports = function profileCommands(ctx) {
     commands: [
       new SlashCommandBuilder()
         .setName('profile')
-        .setDescription('Public snapshot: tiers, recent fights, tryout cooldown (no bans)')
+        .setDescription('Public snapshot: tiers, recent fights, stats (no bans or alts)')
         .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     ],
     handlers: { profile: handleProfile },
