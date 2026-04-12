@@ -586,6 +586,7 @@ module.exports = function coreCommands(ctx) {
 
     const everyone = [
       '`/fighthistory` — fight history',
+      '`/profile` — public player snapshot',
       '`/checkcommands` — this list',
       '`/pmlist` — PM list',
     ];
@@ -623,7 +624,6 @@ module.exports = function coreCommands(ctx) {
     }
     if (lv >= 3) {
       add('Manager+', [
-        '`/profile`',
         '`/submit`',
         '`/primerate`',
         '`/eliterate`',

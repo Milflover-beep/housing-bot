@@ -1,34 +1,16 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
-const MGR = PermissionFlagsBits.ManageRoles;
 const RECENT_FIGHTS = 7;
 
 module.exports = function profileCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn, resolveGuildMember, typeLetterToName, minecraftHeadUrl } =
-    ctx;
+  const { pool, defer, normalizeIgn, typeLetterToName, minecraftHeadUrl } = ctx;
 
   async function handleProfile(interaction) {
-    await defer(interaction, true);
-    const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 3)) {
-      return interaction.editReply({
-        content:
-          '❌ Manager or higher only. If you have the role, enable **Server Members Intent** for the bot and restart it, then try again.',
-      });
-    }
+    await defer(interaction, false);
 
     const ign = normalizeIgn(interaction.options.getString('ign'));
 
-    const [
-      tierNow,
-      scoreAgg,
-      scoreRecent,
-      blActive,
-      ablActive,
-      timeoutLatest,
-      altCount,
-      denialRow,
-    ] = await Promise.all([
+    const [tierNow, scoreAgg, scoreRecent, timeoutLatest, altCount, denialRow] = await Promise.all([
       pool.query(
         `SELECT DISTINCT ON (type) type, tier
          FROM tier_results
@@ -52,17 +34,6 @@ module.exports = function profileCommands(ctx) {
          ORDER BY s.created_at DESC, s.id DESC
          LIMIT $2`,
         [ign, RECENT_FIGHTS]
-      ),
-      pool.query(
-        `SELECT COUNT(*)::int AS c FROM blacklists
-         WHERE LOWER(ign) = $1
-           AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-        [ign]
-      ),
-      pool.query(
-        `SELECT COUNT(*)::int AS c FROM admin_blacklists
-         WHERE LOWER(ign) = $1 AND is_pardoned = false`,
-        [ign]
       ),
       pool.query(
         `SELECT timeout_duration, fight_type, created_at FROM timeouts
@@ -115,12 +86,8 @@ module.exports = function profileCommands(ctx) {
       })
       .join(' · ');
 
-    const blN = blActive.rows[0]?.c || 0;
-    const ablN = ablActive.rows[0]?.c || 0;
     const altN = altCount.rows[0]?.c || 0;
     const noteParts = [];
-    if (blN > 0) noteParts.push(`🚫 **Blacklist** (${blN} active)`);
-    if (ablN > 0) noteParts.push(`🚫 **Admin blacklist** (${ablN})`);
     if (timeoutLatest.rows[0]) {
       const t = timeoutLatest.rows[0];
       noteParts.push(
@@ -134,7 +101,7 @@ module.exports = function profileCommands(ctx) {
       const rk = d.rank_type ? typeLetterToName(d.rank_type) : '?';
       noteParts.push(`⏳ **Tryout cooldown** (${rk}) <t:${ts}:R>`);
     }
-    if (!noteParts.length) noteParts.push('✅ **No** blacklist / admin BL / cooldown flags');
+    if (!noteParts.length) noteParts.push('_No tryout cooldown, timeouts, or linked alts shown._');
 
     const embed = new EmbedBuilder()
       .setTitle(`📋 Profile: ${ign}`)
@@ -148,7 +115,7 @@ module.exports = function profileCommands(ctx) {
         { name: 'Total fights', value: String(total), inline: true },
         { name: 'At a glance', value: noteParts.join('\n').slice(0, 1024), inline: false }
       )
-      .setFooter({ text: `Last ${RECENT_FIGHTS} fights · Manager+ · Ephemeral` });
+      .setFooter({ text: `Last ${RECENT_FIGHTS} fights` });
 
     const headUrl = minecraftHeadUrl(ign);
     if (headUrl) embed.setThumbnail(headUrl);
@@ -160,9 +127,8 @@ module.exports = function profileCommands(ctx) {
     commands: [
       new SlashCommandBuilder()
         .setName('profile')
-        .setDescription('Manager+: compact player snapshot (ephemeral)')
-        .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-        .setDefaultMemberPermissions(MGR),
+        .setDescription('Public snapshot: tiers, recent fights, tryout cooldown (no bans)')
+        .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     ],
     handlers: { profile: handleProfile },
   };

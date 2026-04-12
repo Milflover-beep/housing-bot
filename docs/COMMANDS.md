@@ -146,8 +146,8 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 
 ### `/profile`
 
-- **Description**: **Ephemeral** compact snapshot for an IGN (Manager+) — similar footprint to **`/fighthistory`**: last few fights in the embed body, **W/L / win rate / total fights** inline, **current tiers** on one line, and a short **at a glance** block (active blacklist count, admin blacklist, last timeout, alt count, tryout cooldown if any).
-- **Default permission**: Manage Roles (**Manager+** in handler).
+- **Description**: **Public** compact snapshot for an IGN — same general size as **`/fighthistory`**: recent fights in the embed body, **W/L / win rate / total fights** inline, **current tiers** on one line, and **at a glance** (tryout **cooldown** if active, last **timeout**, **alt** link count). Does **not** include blacklists, admin blacklists, or other ban-style moderation flags.
+- **Default permission**: None (any member can run it; reply is **not** ephemeral).
 - **Options**: `ign` (required)
 
 ### `/removetier`
