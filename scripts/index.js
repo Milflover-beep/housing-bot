@@ -1,4 +1,7 @@
-require('dotenv').config();
+const path = require('path');
+// Load repo-root .env regardless of cwd (e.g. `node scripts/index.js` from any folder).
+// Note: .env is not committed — on Railway/render/etc. set variables in the host UI; they still apply.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const {
   Client,
   GatewayIntentBits,
@@ -38,6 +41,18 @@ client.once('ready', async () => {
     );
   }
   console.log(`✅ Logged in as ${client.user.tag}`);
+  const applicantId = process.env.BOT_ROLE_APPLICANT_ID?.trim();
+  const applicantName = process.env.BOT_ROLE_APPLICANT_NAME?.trim();
+  if (!applicantId && !applicantName) {
+    console.warn(
+      '⚠️ BOT_ROLE_APPLICANT_ID and BOT_ROLE_APPLICANT_NAME are unset in process.env. ' +
+        '/check will look for a role named [APPLICANT]. Add them to .env locally or to your host’s environment variables (not only GitHub — .env is gitignored).'
+    );
+  } else if (!applicantId && applicantName) {
+    console.log(`✅ Applicant role: name="${applicantName}" (BOT_ROLE_APPLICANT_ID unset)`);
+  } else if (applicantId) {
+    console.log(`✅ Applicant role: id(s) configured (${applicantId.split(',').length} segment(s))`);
+  }
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
   const body = commands.map((c) => c.toJSON());
   const guildId = process.env.GUILD_ID;

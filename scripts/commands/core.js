@@ -181,7 +181,11 @@ module.exports = function coreCommands(ctx) {
                   '\n\n⚠️ Applicant role: **BOT_ROLE_APPLICANT_ID** is set but is not a valid snowflake (17–20 digits, comma-separated). Remove quotes/spaces from the value or fix the ID. ' +
                   'Alternatively set **BOT_ROLE_APPLICANT_NAME** to the role’s exact Discord name (e.g. `Premium/PM Applicant`).';
               } else {
-                roleNote = `\n\n⚠️ No role named **${name}**. Set **BOT_ROLE_APPLICANT_ID** to the role’s snowflake, or set **BOT_ROLE_APPLICANT_NAME** to the role’s exact Discord name.`;
+                const hostHint =
+                  name === '[APPLICANT]'
+                    ? ' If the bot runs on Railway or similar, add these in the **host’s Variables** (your local `.env` is not deployed).'
+                    : '';
+                roleNote = `\n\n⚠️ No role named **${name}**. Set **BOT_ROLE_APPLICANT_ID** or **BOT_ROLE_APPLICANT_NAME** in the environment the bot process uses.${hostHint}`;
               }
             } else if (!member.roles.cache.has(role.id)) {
               await member.roles.add(role);
