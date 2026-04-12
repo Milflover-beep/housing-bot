@@ -146,7 +146,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 
 ### `/profile`
 
-- **Description**: **Public** compact snapshot for an IGN — same general size as **`/fighthistory`**: recent fights in the embed body, **W/L**, **win rate** (with **average points scored per fight** when `final_score` parses), **total fights** inline, **current tiers** on one line, and **at a glance** (**tryout cooldown: Yes/No** for whether they are on cooldown *right now*, last **timeout**). Does **not** include blacklists, admin blacklists, alts, or other hidden moderation flags.
+- **Description**: **Public** compact snapshot for an IGN — same general size as **`/fighthistory`**: **last 8** fights in the embed body, **W/L**, **win rate** (with **average points scored per fight** when `final_score` parses), **total fights** inline, **one tier line** (latest `tier_results` row: ladder + label, or *Not placed in a tier*), and **tryout cooldown: Yes/No** (active application cooldown only). Does **not** include blacklists, admin blacklists, timeouts, alts, or other hidden moderation flags.
 - **Default permission**: None (any member can run it; reply is **not** ephemeral).
 - **Options**: `ign` (required)
 

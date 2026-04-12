@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
-const RECENT_FIGHTS = 7;
+const RECENT_FIGHTS = 8;
 const AVG_SCORE_FIGHT_CAP = 5000;
 
 /** `final_score` is winner–loser (e.g. `10-8`). */
@@ -23,12 +23,12 @@ module.exports = function profileCommands(ctx) {
 
     const ign = normalizeIgn(interaction.options.getString('ign'));
 
-    const [tierNow, scoreAgg, scoreRecent, scoreRowsAvg, timeoutLatest, denialRow] = await Promise.all([
+    const [tierNow, scoreAgg, scoreRecent, scoreRowsAvg, denialRow] = await Promise.all([
       pool.query(
-        `SELECT DISTINCT ON (type) type, tier
-         FROM tier_results
-         WHERE LOWER(ign) = $1
-         ORDER BY type, id DESC`,
+        `SELECT type, tier FROM tier_results
+         WHERE LOWER(ign) = $1 AND COALESCE(TRIM(tier), '') <> ''
+         ORDER BY id DESC
+         LIMIT 1`,
         [ign]
       ),
       pool.query(
@@ -54,11 +54,6 @@ module.exports = function profileCommands(ctx) {
          ORDER BY s.id DESC
          LIMIT $2`,
         [ign, AVG_SCORE_FIGHT_CAP]
-      ),
-      pool.query(
-        `SELECT timeout_duration, fight_type, created_at FROM timeouts
-         WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 1`,
-        [ign]
       ),
       pool
         .query(
@@ -102,34 +97,23 @@ module.exports = function profileCommands(ctx) {
     const fightBlock =
       fightLines.length > 3800 ? `${fightLines.slice(0, 3780)}\n… _(truncated)_` : fightLines;
 
-    const byType = {};
-    for (const row of tierNow.rows) byType[row.type] = row.tier;
-    const ladderOrder = ['P', 'E', 'A'];
-    const tierCompact = ladderOrder
-      .map((L) => {
-        const t = byType[L];
-        const name = typeLetterToName(L);
-        return `**${name}** ${t ? `\`${t}\`` : '`—`'}`;
-      })
-      .join(' · ');
+    const tr = tierNow.rows[0];
+    const tierLabel = tr && String(tr.tier || '').trim();
+    const tierDisplay = tierLabel
+      ? `**${typeLetterToName(tr.type)}** \`${tierLabel}\``
+      : 'Not placed in a tier.';
 
     const onTryoutCooldown = Boolean(denialRow.rows?.length > 0);
     const noteParts = [
       `⏳ **Tryout cooldown (active now):** ${onTryoutCooldown ? '**Yes**' : '**No**'}`,
     ];
-    if (timeoutLatest.rows[0]) {
-      const t = timeoutLatest.rows[0];
-      noteParts.push(
-        `⏱️ **Last timeout:** ${t.timeout_duration}${t.fight_type ? ` · ${t.fight_type}` : ''}`
-      );
-    }
 
     const embed = new EmbedBuilder()
       .setTitle(`📋 Profile: ${ign}`)
       .setColor(0x9c27b0)
       .setDescription(fightBlock)
       .addFields(
-        { name: 'Current tiers', value: tierCompact, inline: false },
+        { name: 'Tier', value: tierDisplay, inline: false },
         { name: 'Wins', value: String(wins), inline: true },
         { name: 'Losses', value: String(losses), inline: true },
         {
