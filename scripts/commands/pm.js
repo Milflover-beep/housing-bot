@@ -33,6 +33,184 @@ module.exports = function pmCommands(ctx) {
     return `${text.slice(0, max - 20)}… _(truncated)_`;
   }
 
+  /** `final_score` is winner–loser (e.g. `10-8`). */
+  function parseFinalScore(str) {
+    const m = String(str ?? '')
+      .trim()
+      .match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (!m) return null;
+    const winnerPts = parseInt(m[1], 10);
+    const loserPts = parseInt(m[2], 10);
+    if (!Number.isFinite(winnerPts) || !Number.isFinite(loserPts)) return null;
+    return { winnerPts, loserPts };
+  }
+
+  function mean(nums) {
+    if (!nums.length) return null;
+    return nums.reduce((a, b) => a + b, 0) / nums.length;
+  }
+
+  function median(nums) {
+    if (!nums.length) return null;
+    const s = [...nums].sort((x, y) => x - y);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  }
+
+  function fmtNum(n, digits = 2) {
+    if (n === null || n === undefined || Number.isNaN(n)) return '—';
+    return Number(n).toFixed(digits);
+  }
+
+  /**
+   * @param {string} ignLower
+   * @param {Array<{ winner_ign: string, loser_ign: string, final_score: string, fight_type: string, fight_number: number, created_at: Date }>} rows oldest-first
+   */
+  function buildPmDebugEmbed(ignLower, rows) {
+    const typeKey = (ft) => {
+      const s = String(ft || '').toLowerCase();
+      if (s === 'prime' || s === 'p') return 'Prime';
+      if (s === 'elite' || s === 'e') return 'Elite';
+      if (s === 'apex' || s === 'a') return 'Apex';
+      return ft ? String(ft) : 'Other';
+    };
+
+    const marginsWin = [];
+    const marginsLoss = [];
+    const pmPtsWins = [];
+    const oppPtsWins = [];
+    const pmPtsLoss = [];
+    const oppPtsLoss = [];
+    const totalPtsPerFight = [];
+    const byType = {};
+
+    let unparseable = 0;
+    const chronological = [];
+
+    for (const r of rows) {
+      const wIn = String(r.winner_ign || '').trim().toLowerCase();
+      const won = wIn === ignLower;
+      const tk = typeKey(r.fight_type);
+      if (!byType[tk]) byType[tk] = { w: 0, l: 0 };
+      if (won) byType[tk].w += 1;
+      else byType[tk].l += 1;
+
+      const parsed = parseFinalScore(r.final_score);
+      if (!parsed) {
+        unparseable += 1;
+        chronological.push({ won, margin: null, typeKey: tk });
+        continue;
+      }
+      const { winnerPts, loserPts } = parsed;
+      const pmPts = won ? winnerPts : loserPts;
+      const oppPts = won ? loserPts : winnerPts;
+      const margin = pmPts - oppPts;
+      totalPtsPerFight.push(winnerPts + loserPts);
+      if (won) {
+        marginsWin.push(margin);
+        pmPtsWins.push(pmPts);
+        oppPtsWins.push(oppPts);
+      } else {
+        marginsLoss.push(margin);
+        pmPtsLoss.push(pmPts);
+        oppPtsLoss.push(oppPts);
+      }
+      chronological.push({ won, margin, typeKey: tk });
+    }
+
+    const total = rows.length;
+    const wins = chronological.filter((c) => c.won).length;
+    const losses = chronological.filter((c) => !c.won).length;
+    const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
+
+    let bestWinStreak = 0;
+    let bestLossStreak = 0;
+    let curW = 0;
+    let curL = 0;
+    for (const c of chronological) {
+      if (c.won) {
+        curW += 1;
+        curL = 0;
+        bestWinStreak = Math.max(bestWinStreak, curW);
+      } else {
+        curL += 1;
+        curW = 0;
+        bestLossStreak = Math.max(bestLossStreak, curL);
+      }
+    }
+    let currentStreak = 0;
+    let currentLabel = '—';
+    for (let i = chronological.length - 1; i >= 0; i--) {
+      const c = chronological[i];
+      if (currentStreak === 0) {
+        currentStreak = 1;
+        currentLabel = c.won ? 'W' : 'L';
+      } else if ((c.won ? 'W' : 'L') === currentLabel) {
+        currentStreak += 1;
+      } else break;
+    }
+    if (chronological.length === 0) {
+      currentStreak = 0;
+      currentLabel = '—';
+    }
+
+    const firstAt = rows[0]?.created_at;
+    const lastAt = rows[rows.length - 1]?.created_at;
+    const dateSpan =
+      firstAt && lastAt
+        ? `First: <t:${Math.floor(new Date(firstAt).getTime() / 1000)}:d>\nLast: <t:${Math.floor(new Date(lastAt).getTime() / 1000)}:d>`
+        : '—';
+
+    const ladderLines = Object.keys(byType)
+      .sort()
+      .map((k) => {
+        const { w, l } = byType[k];
+        const t = w + l;
+        const pct = t ? ((w / t) * 100).toFixed(1) : '0.0';
+        return `**${k}** — ${w}W / ${l}L (${pct}% in-type)`;
+      });
+    const ladderBlock = ladderLines.length ? ladderLines.join('\n') : '_No fights_';
+
+    const overview = [
+      `**Fights:** ${total} (${wins}W / ${losses}L) · **Win rate:** ${winRate}%`,
+      unparseable
+        ? `⚠️ **Unparseable \`final_score\`:** ${unparseable} (W/L still counted; margins omit those)`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const avgMarginW = mean(marginsWin);
+    const avgMarginL = mean(marginsLoss);
+    const medMarginW = median(marginsWin);
+    const medMarginL = median(marginsLoss);
+    const scoring = [
+      `**Margin (PM − opp)** — wins: avg **${fmtNum(avgMarginW)}** · median **${fmtNum(medMarginW)}**`,
+      `**Margin** — losses: avg **${fmtNum(avgMarginL)}** · median **${fmtNum(medMarginL)}**`,
+      `**PM score** — in wins: avg **${fmtNum(mean(pmPtsWins))}** · in losses: avg **${fmtNum(mean(pmPtsLoss))}**`,
+      `**Opp score** — in wins: avg **${fmtNum(mean(oppPtsWins))}** · in losses: avg **${fmtNum(mean(oppPtsLoss))}**`,
+      `**Total points / fight** (both players): avg **${fmtNum(mean(totalPtsPerFight))}**`,
+    ].join('\n');
+
+    const streakBlock = [
+      `**Current streak:** ${currentStreak}${currentLabel} _(newest first)_`,
+      `**Best win streak:** ${bestWinStreak} · **Best loss streak:** ${bestLossStreak}`,
+    ].join('\n');
+
+    return new EmbedBuilder()
+      .setTitle(`PM stats (debug): ${ignLower}`)
+      .setColor(0x9b59b6)
+      .setDescription('Staff-only detailed breakdown from `scores`.')
+      .addFields(
+        { name: 'Overview', value: truncateEmbedField(overview, 1024), inline: false },
+        { name: 'Margins & scoring', value: truncateEmbedField(scoring, 1024), inline: false },
+        { name: 'By fight type', value: truncateEmbedField(ladderBlock, 1024), inline: false },
+        { name: 'Streaks', value: streakBlock, inline: false },
+        { name: 'Date span', value: dateSpan, inline: false }
+      )
+      .setTimestamp();
+  }
+
   async function handlePmlist(interaction) {
     await defer(interaction, false);
     const rows = await pool.query('SELECT * FROM pm_list ORDER BY id ASC LIMIT 100');
@@ -175,9 +353,15 @@ module.exports = function pmCommands(ctx) {
   }
 
   async function handlePmstats(interaction) {
-    await defer(interaction, false);
+    const debug = interaction.options.getBoolean('debug') === true;
+    await defer(interaction, debug);
     const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 1)) {
+    if (debug && !requireLevel(member, 2)) {
+      return interaction.editReply({
+        content: '❌ **Debug** mode is Staff+ only.',
+      });
+    }
+    if (!debug && !requireLevel(member, 1)) {
       return interaction.editReply({
         content:
           '❌ PM or higher only. If you have the role, enable **Server Members Intent** for the bot and restart it, then try again.',
@@ -186,6 +370,27 @@ module.exports = function pmCommands(ctx) {
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
+
+    if (debug) {
+      let q = `
+        SELECT winner_ign, loser_ign, final_score, fight_type, fight_number, created_at
+        FROM scores s
+        WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1)
+        AND s.is_voided = false`;
+      const params = [ign];
+      if (start && end) {
+        q += ' AND s.created_at BETWEEN $2 AND $3';
+        params.push(new Date(start), new Date(end));
+      }
+      q += ' ORDER BY s.created_at ASC, s.id ASC LIMIT 3000';
+      const detail = await pool.query(q, params);
+      const embed = buildPmDebugEmbed(ign, detail.rows);
+      const footerParts = [];
+      if (detail.rows.length >= 3000) footerParts.push('First 3000 fights in range');
+      footerParts.push(start && end ? `Range: ${start} – ${end}` : 'All recorded fights');
+      embed.setFooter({ text: footerParts.join(' · ') });
+      return interaction.editReply({ embeds: [embed] });
+    }
 
     let sql = `
       SELECT
@@ -278,6 +483,12 @@ module.exports = function pmCommands(ctx) {
       )
       .addStringOption((o) =>
         o.setName('end-date').setDescription('ISO date end (optional)').setRequired(false)
+      )
+      .addBooleanOption((o) =>
+        o
+          .setName('debug')
+          .setDescription('Staff+: margins, streaks, per-ladder W/L, score averages (ephemeral)')
+          .setRequired(false)
       )
       .setDefaultMemberPermissions(mgr),
   ];

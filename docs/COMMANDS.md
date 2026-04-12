@@ -322,6 +322,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Options**:
   - `ign` (required)
   - `start-date`, `end-date` (optional) — filter `scores.created_at`
+  - `debug` (optional, boolean) — **Staff+** only: **ephemeral** embed with extra breakdowns (margin PM−opp avg/median in wins vs losses, average PM/opponent/total points per fight where `final_score` parses as `winner–loser`, W/L and win% **by fight type** (Prime / Elite / Apex), current and best win/loss streaks, first/last fight dates). Up to **3000** fights loaded.
 
 ---
 
