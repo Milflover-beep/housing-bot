@@ -33,14 +33,6 @@ module.exports = function coreCommands(ctx) {
     });
   }
 
-  function timeAgo(date) {
-    const diff = Date.now() - new Date(date).getTime();
-    const days = Math.floor(diff / 86400000);
-    if (days === 0) return 'today';
-    if (days === 1) return 'yesterday';
-    return `${days} days ago`;
-  }
-
   async function handleCheck(interaction) {
     await defer(interaction, false);
     const runner = await resolveGuildMember(interaction);
@@ -55,8 +47,6 @@ module.exports = function coreCommands(ctx) {
     const discord = discordUser.id;
     const rankType = interaction.options.getString('rank-type');
     const applyLadderLetter = rankType.charAt(0).toUpperCase(); // P | E | A
-    const LADDER_ORDER = { P: 0, E: 1, A: 2 };
-    const LADDER_NAME = { P: 'Prime', E: 'Elite', A: 'Apex' };
 
     const hypixelKey = process.env.HYPIXEL_API_KEY;
     const [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
@@ -144,38 +134,17 @@ module.exports = function coreCommands(ctx) {
       issues.push(`⏳ **Application cooldown** — ends <t:${ts}:F> (<t:${ts}:R>)`);
     }
 
-    /** Latest tier row per ladder (Prime / Elite / Apex). Re-applying on the same ladder is OK (higher tier goal). */
+    /** Latest tier row per ladder (Prime / Elite / Apex). Higher tiers may `/check` for lower ladders without a warning. */
     const latestByLadder = {};
     for (const row of allTierRows.rows) {
       if (!latestByLadder[row.type]) latestByLadder[row.type] = row;
     }
-    let maxHeldOrder = -1;
-    let maxHeldLetter = null;
-    for (const letter of ['P', 'E', 'A']) {
-      if (latestByLadder[letter]) {
-        const o = LADDER_ORDER[letter];
-        if (o > maxHeldOrder) {
-          maxHeldOrder = o;
-          maxHeldLetter = letter;
-        }
-      }
-    }
 
-    if (applyLadderLetter === 'A' && !latestByLadder['E']) {
+    /** Apex: need Elite or Apex on file (re-apply). Prime-only or unranked cannot apply for Apex. */
+    if (applyLadderLetter === 'A' && !latestByLadder['E'] && !latestByLadder['A']) {
       eligible = false;
       issues.push(
-        '🔼 **Apex tryout** — they must already have **Elite** tier on file before applying for Apex.'
-      );
-    }
-
-    const applyOrder = LADDER_ORDER[applyLadderLetter];
-    if (maxHeldOrder > applyOrder && maxHeldLetter) {
-      const held = latestByLadder[maxHeldLetter];
-      issues.push(
-        `📉 **Applying below current ladder** — on file they have **${LADDER_NAME[maxHeldLetter]}** ` +
-          `(tier **${held.tier}**, ${timeAgo(held.created_at)}). They are checking for **${
-            LADDER_NAME[applyLadderLetter]
-          }**, which is a lower ladder. Confirm this is intentional.`
+        '🔼 **Apex tryout** — need **Elite** or **Apex** tier on file. **Prime** or **no tier** cannot apply for Apex (use Prime or Elite first).'
       );
     }
 
@@ -190,7 +159,7 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
-    /** Full pass: no hard blocks and no public notes (ladder mismatch, etc.). Applicant role only here. */
+    /** Full pass: no hard blocks and no public notes. Applicant role only here. */
     const passedCheck = eligible && issues.length === 0;
 
     let roleNote = '';
