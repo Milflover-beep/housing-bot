@@ -27,9 +27,6 @@ module.exports = function pmCommands(ctx) {
 
   async function handlePmlist(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 1)) {
-      return interaction.editReply({ content: '❌ PM or higher only.' });
-    }
     const rows = await pool.query('SELECT * FROM pm_list ORDER BY id ASC LIMIT 100');
     if (rows.rows.length === 0) {
       return interaction.editReply({ content: 'PM list is empty.' });
@@ -201,8 +198,7 @@ module.exports = function pmCommands(ctx) {
   const commands = [
     new SlashCommandBuilder()
       .setName('pmlist')
-      .setDescription('View the PM list')
-      .setDefaultMemberPermissions(mgr),
+      .setDescription('View the PM list'),
     new SlashCommandBuilder()
       .setName('addpm')
       .setDescription('Add a PM to the list')

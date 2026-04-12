@@ -281,7 +281,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 ### `/pmlist`
 
 - **Description**: Lists PMs grouped by manager type (Prime / Elite / Apex / N/A).
-- **Default permission**: Manage Roles (**PM+**).
+- **Permission**: **Everyone** (no Discord permission gate; no bot role check).
 
 ### `/addpm`
 

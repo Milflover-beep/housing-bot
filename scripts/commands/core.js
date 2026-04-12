@@ -501,14 +501,18 @@ module.exports = function coreCommands(ctx) {
       lines.push(`**${tier}**\n${cmds.filter(Boolean).join('\n')}`);
     };
 
-    const everyone = ['`/fighthistory` — fight history', '`/checkcommands` — this list'];
+    const everyone = [
+      '`/fighthistory` — fight history',
+      '`/checkcommands` — this list',
+      '`/pmlist` — PM list',
+    ];
     add('Everyone', everyone);
 
     if (lv >= 1 || ctx.hasBoosterOrAbove(interaction.member)) {
       add('Booster+ / PM+', ['`/tierlist` — tier list', '`/viewtier` — view a player tier']);
     }
     if (lv >= 1) {
-      add('PM+', ['`/pmlist`', '`/pmstats`']);
+      add('PM+', ['`/pmstats`']);
     }
     if (lv >= 2) {
       add('Staff+', [
