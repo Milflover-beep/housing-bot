@@ -8,6 +8,7 @@ const {
   REST,
   Routes,
   MessageFlags,
+  Events,
 } = require('discord.js');
 const pool = require('./lib/pool');
 const { ensureDatabaseSchema } = require('./lib/ensureSchema');
@@ -28,7 +29,7 @@ const client = new Client({ intents });
 
 const { commands, handlers, buttonHandlers } = build();
 
-client.once('ready', async () => {
+client.once(Events.ClientReady, async () => {
   try {
     await ensureDatabaseSchema(pool);
   } catch (err) {
@@ -44,9 +45,13 @@ client.once('ready', async () => {
   const applicantId = process.env.BOT_ROLE_APPLICANT_ID?.trim();
   const applicantName = process.env.BOT_ROLE_APPLICANT_NAME?.trim();
   if (!applicantId && !applicantName) {
+    const onRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+    const railwayHint = onRailway
+      ? ' On Railway: open the **Node/bot service** (not the Postgres database service) → **Variables** → add `BOT_ROLE_APPLICANT_ID` (role snowflake) and/or `BOT_ROLE_APPLICANT_NAME` → **Redeploy**. Your local `.env` is never uploaded from Git.'
+      : ' Add them to .env locally or to your host’s environment variables.';
     console.warn(
       '⚠️ BOT_ROLE_APPLICANT_ID and BOT_ROLE_APPLICANT_NAME are unset in process.env. ' +
-        '/check will look for a role named [APPLICANT]. Add them to .env locally or to your host’s environment variables (not only GitHub — .env is gitignored).'
+        `/check will look for a role named [APPLICANT].${railwayHint}`
     );
   } else if (!applicantId && applicantName) {
     console.log(`✅ Applicant role: name="${applicantName}" (BOT_ROLE_APPLICANT_ID unset)`);
