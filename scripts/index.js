@@ -60,7 +60,12 @@ client.once(Events.ClientReady, async () => {
   }
   const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
   const body = commands.map((c) => c.toJSON());
-  const guildId = process.env.GUILD_ID;
+  const guildId = process.env.GUILD_ID?.trim();
+  const cmdNames = body.map((c) => c.name);
+  const hasAccept = cmdNames.includes('accept');
+  console.log(
+    `📋 Slash command payload: ${body.length} commands, /accept in list: ${hasAccept}`
+  );
   try {
     // When developing with GUILD_ID, old global commands still show in Discord (duplicate /check, etc.).
     // Clear globals unless CLEAR_GLOBAL_COMMANDS=false (e.g. you need the same bot in multiple servers).
@@ -70,10 +75,14 @@ client.once(Events.ClientReady, async () => {
     }
     if (guildId) {
       await rest.put(Routes.applicationGuildCommands(client.user.id, guildId), { body });
-      console.log(`✅ Slash commands registered to guild ${guildId} (instant)`);
+      console.log(`✅ Slash commands registered to guild ${guildId} (should appear in ~1 minute)`);
     } else {
       await rest.put(Routes.applicationCommands(client.user.id), { body });
       console.log('✅ Slash commands registered globally');
+      console.warn(
+        '⚠️ GUILD_ID is unset — new/changed commands (e.g. /accept) can take **up to ~1 hour** to show in servers. ' +
+          'Set GUILD_ID in Railway to your server ID for **instant** guild registration.'
+      );
     }
   } catch (err) {
     console.error('❌ Failed to register commands:', err);
