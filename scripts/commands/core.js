@@ -186,7 +186,7 @@ module.exports = function coreCommands(ctx) {
       altStaffMessage = `🔀 **Known alts on file for \`${ign}\`** (only you can see this message):\n${altList}`;
       if (getMemberLevel(runner) < 2) {
         altStaffMessage +=
-          '\n\nIf you need help with this applicant, **ping a Manager or Admin**.';
+          '\n\n**Ping a Manager** — include this message (or copy the alt lines above) when you ping them.';
       }
     }
 
@@ -612,6 +612,7 @@ module.exports = function coreCommands(ctx) {
         '`/bancheck`',
         '`/addalt`',
         '`/editalt`',
+        '`/deletealt`',
         '`/clearalt`',
         '`/whitelist`',
         '`/update` (IGN)',

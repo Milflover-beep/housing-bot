@@ -44,7 +44,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `ign` (string, required) — Minecraft IGN, or **UUID** when the value is longer than 16 characters (passed to Hypixel as `name` vs `uuid`).
   - `discord` (user, required) — linked Discord account (cooldown + applicant role).
   - `rank-type` (choice, required) — `Prime` | `Elite` | `Apex` (must match the ladder you’re checking).
-- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**. When the API **succeeds**, players must be **network level 30+** with a real profile or the check is **not eligible** (red). When the API **fails** (HTTP errors, rate limits, missing key, bad JSON, etc.), **Hypixel is not enforced** for that run — pass/fail follows only the other rules below, and an embed field tells staff to use **`/hypixel`** to verify level manually. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, “applying below current ladder”) can yield **eligible with warnings** (amber). **Known alts** are not included in the public embed; the invoker gets an **ephemeral** follow-up with alt details (PM+ and Staff+). **PM-only** runners see an extra line to **ping a Manager or Admin** if they need help. Full pass (green) assigns the applicant role when configured (including when the only extra context was alts).
+- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**. When the API **succeeds**, players must be **network level 30+** with a real profile or the check is **not eligible** (red). When the API **fails** (HTTP errors, rate limits, missing key, bad JSON, etc.), **Hypixel is not enforced** for that run — pass/fail follows only the other rules below, and an embed field tells staff to use **`/hypixel`** to verify level manually. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, “applying below current ladder”) can yield **eligible with warnings** (amber). **Known alts** are not included in the public embed; the invoker gets an **ephemeral** follow-up with alt details (PM+ and Staff+). **PM-only** runners get an extra line instructing them to **ping a Manager** and include that information. Full pass (green) assigns the applicant role when configured (including when the only extra context was alts).
 
 ### `/hypixel`
 
@@ -142,6 +142,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Description**: View current tier rows for an IGN (one row per ladder when duplicates were cleaned up).
 - **Permission**: PM+ or booster role (see `hasBoosterOrAbove`).
 - **Options**: `ign` (required)
+- **Behavior**: Each ladder line shows **tier** and the **date** that `tier_results` row was created (when they were placed there), not the tester name.
 
 ### `/removetier`
 
@@ -339,10 +340,17 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Description**: Rows in `alts` touching this IGN.
 - **Default permission**: Manage Roles (**Staff+**).
 - **Options**: `ign` (required)
+- **Behavior**: Ephemeral reply (only you see the list).
+
+### `/deletealt`
+
+- **Description**: Delete **one** alt link by `alts.id` (the number shown on `/viewalts` lines).
+- **Default permission**: Manage Roles (**Staff+**).
+- **Options**: `id` (integer, required)
 
 ### `/clearalt`
 
-- **Description**: Delete alt rows where `original_ign` matches.
+- **Description**: Delete **all** alt rows where `original_ign` matches.
 - **Default permission**: Manage Roles (**Staff+**).
 - **Options**: `original-ign` (required)
 

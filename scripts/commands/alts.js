@@ -19,7 +19,7 @@ module.exports = function altsCommands(ctx) {
   }
 
   async function handleViewalts(interaction) {
-    await defer(interaction, false);
+    await defer(interaction, true);
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
@@ -36,6 +36,25 @@ module.exports = function altsCommands(ctx) {
         `• \`${row.original_ign}\` ↔ \`${row.alt_ign}\` (whitelist: ${row.is_whitelisted}) #${row.id}`
     );
     await interaction.editReply({ content: lines.join('\n').slice(0, 3900) });
+  }
+
+  async function handleDeletealt(interaction) {
+    await defer(interaction, false);
+    if (!requireLevel(interaction.member, 2)) {
+      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    }
+    const id = interaction.options.getInteger('id', true);
+    const q = await pool.query(
+      'DELETE FROM alts WHERE id = $1 RETURNING id, original_ign, alt_ign',
+      [id]
+    );
+    if (q.rows.length === 0) {
+      return interaction.editReply({ content: `❌ No alt row with id **${id}**.` });
+    }
+    const row = q.rows[0];
+    await interaction.editReply({
+      content: `✅ Deleted alt row **#${row.id}** (\`${row.original_ign}\` ↔ \`${row.alt_ign}\`).`,
+    });
   }
 
   async function handleClearalt(interaction) {
@@ -113,8 +132,15 @@ module.exports = function altsCommands(ctx) {
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
       .setDefaultMemberPermissions(mgr),
     new SlashCommandBuilder()
+      .setName('deletealt')
+      .setDescription('Delete one alt link by database id (see /viewalts)')
+      .addIntegerOption((o) =>
+        o.setName('id').setDescription('alts.id from /viewalts').setRequired(true)
+      )
+      .setDefaultMemberPermissions(mgr),
+    new SlashCommandBuilder()
       .setName('clearalt')
-      .setDescription('Clear alt relationships for an original IGN')
+      .setDescription('Clear all alt relationships for an original IGN')
       .addStringOption((o) =>
         o.setName('original-ign').setDescription('Original IGN').setRequired(true)
       )
@@ -145,6 +171,7 @@ module.exports = function altsCommands(ctx) {
     handlers: {
       addalt: handleAddalt,
       viewalts: handleViewalts,
+      deletealt: handleDeletealt,
       clearalt: handleClearalt,
       editalt: handleEditalt,
       whitelist: handleWhitelist,

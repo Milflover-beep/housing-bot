@@ -91,7 +91,13 @@ module.exports = function tierCommands(ctx) {
       .setColor(0x9b59b6)
       .setDescription(
         r.rows
-          .map((row) => `**${typeLetterToName(row.type)}** — ${row.tier} (by ${row.tester || '?'})`)
+          .map((row) => {
+            const ts = row.created_at
+              ? Math.floor(new Date(row.created_at).getTime() / 1000)
+              : null;
+            const when = ts ? `<t:${ts}:D>` : '—';
+            return `**${typeLetterToName(row.type)}** — ${row.tier} · ${when}`;
+          })
           .join('\n')
       )
       .setTimestamp();
