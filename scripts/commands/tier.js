@@ -11,6 +11,7 @@ module.exports = function tierCommands(ctx) {
     VALID_TIERS,
     tierRank,
     typeLetterToName,
+    tierListEmbedHeading,
     defer,
     normalizeIgn,
     tierResultsLadderSqlParam,
@@ -163,7 +164,7 @@ module.exports = function tierCommands(ctx) {
     );
     const rows = [...res.rows].sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
     const name = typeLetterToName(letter);
-    const heading = `# 🏆 ${name} tier list`;
+    const heading = tierListEmbedHeading(name);
     const body = rows.length
       ? rows.map((r) => `**${r.ign}** — ${r.tier}`).join('\n')
       : '_Empty._';

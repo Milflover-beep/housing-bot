@@ -51,6 +51,12 @@ function typeLetterToName(letter) {
   return m[letter] || letter;
 }
 
+/** `#` heading line for tier list embeds (e.g. `# 🏆 ELITE TIER LIST`). */
+function tierListEmbedHeading(typeName) {
+  const line = `${String(typeName || '').trim()} tier list`.toUpperCase();
+  return `# 🏆 ${line}`;
+}
+
 function parseDurationToDate(text) {
   const t = String(text || '').trim().toLowerCase();
   if (!t || t === 'perm' || t === 'permanent' || t === 'never') return null;
@@ -175,6 +181,7 @@ module.exports = {
   minecraftHeadUrl,
   tierRank,
   typeLetterToName,
+  tierListEmbedHeading,
   parseDurationToDate,
   parseCooldownToMs,
   formatEvidencePlainUrls,

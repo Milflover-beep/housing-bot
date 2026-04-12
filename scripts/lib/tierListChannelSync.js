@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { tierRank, tierResultsLadderSqlParam } = require('./helpers');
+const { tierRank, tierResultsLadderSqlParam, tierListEmbedHeading } = require('./helpers');
 
 /** Tier lists use only `tier_results` (seed from database_export.xlsx `tier_results` sheet + bot ratings). Not pm_list. */
 
@@ -97,7 +97,7 @@ async function buildCombinedEmbeds(pool) {
     const res = await pool.query(selectCurrentTierRowsSql(), [letter]);
     const rows = [...res.rows];
     const typeName = typeLetterToName(letter);
-    const heading = `# 🏆 ${typeName} tier list`;
+    const heading = tierListEmbedHeading(typeName);
     const body = buildTierListEmbedDescription(rows);
     const desc = `${heading}\n\n${body}`.slice(0, 4096);
     embeds.push(
