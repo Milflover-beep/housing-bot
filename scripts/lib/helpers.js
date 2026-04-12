@@ -97,16 +97,16 @@ function getSlashSubcommand(interaction) {
 }
 
 /**
- * Guild slash commands should include member; if missing, fetch (needs Guild Members intent for uncached users).
+ * Guild slash commands: always fetch the member so role cache is complete (needs Guild Members intent).
+ * Returning interaction.member alone often leaves roles empty or stale.
  */
 async function resolveGuildMember(interaction) {
-  if (interaction.member) return interaction.member;
   const g = interaction.guild;
   if (!g) return null;
   try {
-    return await g.members.fetch(interaction.user.id);
+    return await g.members.fetch(interaction.user.id, { force: true });
   } catch {
-    return null;
+    return interaction.member ?? null;
   }
 }
 
