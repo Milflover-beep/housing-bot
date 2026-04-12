@@ -9,6 +9,7 @@ module.exports = function pmCommands(ctx) {
     normalizeIgn,
     resolveGuildMember,
     minecraftHeadUrl,
+    clampSideScoreForStats,
   } = ctx;
   const mgr = PermissionFlagsBits.ManageRoles;
 
@@ -102,10 +103,12 @@ module.exports = function pmCommands(ctx) {
         continue;
       }
       const { winnerPts, loserPts } = parsed;
-      const pmPts = won ? winnerPts : loserPts;
-      const oppPts = won ? loserPts : winnerPts;
+      const wC = clampSideScoreForStats(winnerPts);
+      const lC = clampSideScoreForStats(loserPts);
+      const pmPts = won ? wC : lC;
+      const oppPts = won ? lC : wC;
       const margin = pmPts - oppPts;
-      totalPtsPerFight.push(winnerPts + loserPts);
+      totalPtsPerFight.push(wC + lC);
       if (won) {
         marginsWin.push(margin);
         pmPtsWins.push(pmPts);
@@ -190,6 +193,7 @@ module.exports = function pmCommands(ctx) {
       `**PM score** — in wins: avg **${fmtNum(mean(pmPtsWins))}** · in losses: avg **${fmtNum(mean(pmPtsLoss))}**`,
       `**Opp score** — in wins: avg **${fmtNum(mean(oppPtsWins))}** · in losses: avg **${fmtNum(mean(oppPtsLoss))}**`,
       `**Total points / fight** (both players): avg **${fmtNum(mean(totalPtsPerFight))}**`,
+      '_Per-side points clamp at **10** for these stats (raw DB can show 12–10 overtime or mis-logs)._',
     ].join('\n');
 
     const streakBlock = [

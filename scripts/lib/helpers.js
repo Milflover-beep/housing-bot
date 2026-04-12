@@ -165,6 +165,16 @@ function tierResultsLadderSqlParam(alias = '') {
   )`;
 }
 
+/**
+ * Housing stats assume each side’s points are 0–10. Raw `final_score` can exceed that
+ * (overtime e.g. 12–10, typos). Use this when computing averages/margins so stats match league rules.
+ */
+function clampSideScoreForStats(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x < 0) return 0;
+  return Math.min(x, 10);
+}
+
 /** HTTPS URL for a Minecraft helm render (embed thumbnail). Uses Minotar: /helm/{ign}/64.png */
 function minecraftHeadUrl(ign) {
   const raw = String(ign || '').trim();
@@ -191,4 +201,5 @@ module.exports = {
   getSlashSubcommand,
   resolveGuildMember,
   tierResultsLadderSqlParam,
+  clampSideScoreForStats,
 };

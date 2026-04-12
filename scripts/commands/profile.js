@@ -16,7 +16,7 @@ function parseFinalScore(str) {
 }
 
 module.exports = function profileCommands(ctx) {
-  const { pool, defer, normalizeIgn, typeLetterToName, minecraftHeadUrl } = ctx;
+  const { pool, defer, normalizeIgn, typeLetterToName, minecraftHeadUrl, clampSideScoreForStats } = ctx;
 
   async function handleProfile(interaction) {
     await defer(interaction, false);
@@ -75,7 +75,9 @@ module.exports = function profileCommands(ctx) {
       const parsed = parseFinalScore(row.final_score);
       if (!parsed) continue;
       const won = String(row.winner_ign || '').trim().toLowerCase() === ign;
-      ptsList.push(won ? parsed.winnerPts : parsed.loserPts);
+      ptsList.push(
+        clampSideScoreForStats(won ? parsed.winnerPts : parsed.loserPts)
+      );
     }
     const avgScore =
       ptsList.length > 0
@@ -118,7 +120,9 @@ module.exports = function profileCommands(ctx) {
         { name: 'Losses', value: String(losses), inline: true },
         {
           name: 'Win rate',
-          value: `${wr}%${avgScore != null ? ` · Avg **${avgScore}** pts/fight` : ''}`,
+          value: `${wr}%${
+            avgScore != null ? ` · Avg **${avgScore}** pts/fight (each side capped at 10)` : ''
+          }`,
           inline: true,
         },
         { name: 'Total fights', value: String(total), inline: true },
