@@ -72,7 +72,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 ### `/score`
 
 - **Description**: Log a fight result to the database.
-- **Default permission**: Manage Roles (**Staff+**).
+- **Default permission**: None at the Discord level — the bot requires **Staff+** via **`BOT_ROLE_STAFF_ID`** / staff access role (`requireLevel` 2).
 - **Options**:
   - `winner-ign`, `loser-ign` (string, required)
   - `final-score` (string, required) — e.g. `10-8`

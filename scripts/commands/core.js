@@ -724,8 +724,7 @@ module.exports = function coreCommands(ctx) {
             { name: 'Elite', value: 'elite' },
             { name: 'Apex', value: 'apex' }
           )
-      )
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+      ),
 
     new SlashCommandBuilder()
       .setName('fighthistory')
