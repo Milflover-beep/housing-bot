@@ -623,7 +623,7 @@ module.exports = function coreCommands(ctx) {
     }
     if (lv >= 3) {
       add('Manager+', [
-        '`/info`',
+        '`/profile`',
         '`/submit`',
         '`/primerate`',
         '`/eliterate`',

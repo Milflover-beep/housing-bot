@@ -6,7 +6,7 @@ const modules = [
   require('./core'),
   require('./hypixel'),
   require('./applications'),
-  require('./info'),
+  require('./profile'),
   require('./tier'),
   require('./blacklist'),
   require('./watchlist'),

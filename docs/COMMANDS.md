@@ -142,14 +142,13 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Description**: View current tier rows for an IGN (one row per ladder when duplicates were cleaned up).
 - **Permission**: PM+ or booster role (see `hasBoosterOrAbove`).
 - **Options**: `ign` (required)
-- **Behavior**: Each ladder line shows **tier** and, when `tier_results.created_at` is present, the **date that row was created** (treated as when they were placed in that tier). If there is no usable timestamp, only the ladder and tier are shown. The embed does **not** use a “last updated” footer timestamp (that was previously confused with placement date).
+- **Behavior**: One line per ladder: **ladder name** and **tier** only (no dates).
 
-### `/info`
+### `/profile`
 
-- **Description**: One-place **ephemeral** dossier for an IGN (Manager+).
+- **Description**: **Ephemeral** compact snapshot for an IGN (Manager+) — similar footprint to **`/fighthistory`**: last few fights in the embed body, **W/L / win rate / total fights** inline, **current tiers** on one line, and a short **at a glance** block (active blacklist count, admin blacklist, last timeout, alt count, tryout cooldown if any).
 - **Default permission**: Manage Roles (**Manager+** in handler).
 - **Options**: `ign` (required)
-- **Behavior**: Three embeds — **current tiers** + **tier_history** (recent lines with `rated_at` when present), **fight** aggregate + recent `scores` rows, then **blacklists**, **admin_blacklists**, **timeouts**, **alts**, **application_denials** (if table exists and row active), **uuid_registry**. Long sections are truncated to Discord field limits.
 
 ### `/removetier`
 
@@ -354,6 +353,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Description**: Delete **one** alt link by `alts.id` (the number shown on `/viewalts` lines).
 - **Default permission**: Manage Roles (**Staff+**).
 - **Options**: `id` (integer, required)
+- **Behavior**: Ephemeral confirmation.
 
 ### `/clearalt`
 

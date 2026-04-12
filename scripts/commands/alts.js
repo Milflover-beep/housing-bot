@@ -39,7 +39,7 @@ module.exports = function altsCommands(ctx) {
   }
 
   async function handleDeletealt(interaction) {
-    await defer(interaction, false);
+    await defer(interaction, true);
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
