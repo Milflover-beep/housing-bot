@@ -59,15 +59,10 @@ module.exports = function coreCommands(ctx) {
     const LADDER_NAME = { P: 'Prime', E: 'Elite', A: 'Apex' };
 
     const hypixelKey = process.env.HYPIXEL_API_KEY;
-    const [blacklistRows, adminBlacklistRows, timeoutRows, altRows, allTierRows, hypixelResult] =
-      await Promise.all([
+    const [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
         pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
         pool.query(
           'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
-          [ign]
-        ),
-        pool.query(
-          'SELECT * FROM timeouts WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 1',
           [ign]
         ),
         pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
@@ -140,16 +135,9 @@ module.exports = function coreCommands(ctx) {
       issues.push(`🚫 **Admin Blacklisted** — ${abl.reason}`);
     }
 
-    if (timeoutRows.rows.length > 0) {
-      const timeout = timeoutRows.rows[0];
-      issues.push(`⏱️ **Last timeout** — ${timeout.timeout_duration} (${timeAgo(timeout.created_at)})`);
-    }
-
     if (denialRows.rows.length > 0) {
       eligible = false;
-      const d = denialRows.rows[0];
-      const ts = Math.floor(new Date(d.cooldown_until).getTime() / 1000);
-      issues.push(`⏳ **Application cooldown** — cannot re-apply until <t:${ts}:F> (<t:${ts}:R>)`);
+      issues.push('⏳ **Application cooldown** — **Yes** (cannot apply now).');
     }
 
     /** Latest tier row per ladder (Prime / Elite / Apex). Re-applying on the same ladder is OK (higher tier goal). */
@@ -190,7 +178,7 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
-    /** Full pass: no hard blocks and no public notes (timeouts, ladder mismatch, etc.). Applicant role only here. */
+    /** Full pass: no hard blocks and no public notes (ladder mismatch, etc.). Applicant role only here. */
     const passedCheck = eligible && issues.length === 0;
 
     let roleNote = '';
