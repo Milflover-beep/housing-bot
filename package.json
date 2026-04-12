@@ -8,6 +8,7 @@
     "seed": "node scripts/seed.js",
     "db:reset": "node scripts/seed.js --reset",
     "reset-tiers": "node scripts/resetTierResultsFromExcel.js",
+    "seed-tierlist-static": "node scripts/seedTierListStatic.js",
     "docs:pdf": "pandoc docs/COMMANDS.md -o housing-bot-commands.pdf"
   }, 
   "repository": {
