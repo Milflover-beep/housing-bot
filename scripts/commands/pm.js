@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = function pmCommands(ctx) {
-  const { pool, requireLevel, isAdminOrOwner, defer, normalizeIgn } = ctx;
+  const { pool, requireLevel, isAdminOrOwner, defer, normalizeIgn, resolveGuildMember } = ctx;
   const mgr = PermissionFlagsBits.ManageRoles;
 
   const PM_MANAGER_CHOICES = [
@@ -54,8 +54,12 @@ module.exports = function pmCommands(ctx) {
 
   async function handleAddpm(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    const member = await resolveGuildMember(interaction);
+    if (!requireLevel(member, 2)) {
+      return interaction.editReply({
+        content:
+          '❌ Staff or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+      });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const ping = interaction.options.getInteger('ping');
@@ -89,8 +93,12 @@ module.exports = function pmCommands(ctx) {
 
   async function handleDeletepm(interaction) {
     await defer(interaction, true);
-    if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
-      return interaction.editReply({ content: '❌ Admin or owner only.' });
+    const member = await resolveGuildMember(interaction);
+    if (!isAdminOrOwner(member, interaction.user.id)) {
+      return interaction.editReply({
+        content:
+          '❌ Admin or owner only. If you have the role, enable **Server Members Intent** for the bot and restart it.',
+      });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const q = await pool.query(
@@ -111,8 +119,12 @@ module.exports = function pmCommands(ctx) {
 
   async function handleEditpm(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    const member = await resolveGuildMember(interaction);
+    if (!requireLevel(member, 2)) {
+      return interaction.editReply({
+        content:
+          '❌ Staff or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+      });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const ping = interaction.options.getInteger('ping');
@@ -150,8 +162,12 @@ module.exports = function pmCommands(ctx) {
 
   async function handlePmstats(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 1)) {
-      return interaction.editReply({ content: '❌ PM or higher only.' });
+    const member = await resolveGuildMember(interaction);
+    if (!requireLevel(member, 1)) {
+      return interaction.editReply({
+        content:
+          '❌ PM or higher only. If you have the role, enable **Server Members Intent** for the bot and restart it, then try again.',
+      });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const start = interaction.options.getString('start-date');
