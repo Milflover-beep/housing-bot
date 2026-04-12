@@ -142,7 +142,14 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Description**: View current tier rows for an IGN (one row per ladder when duplicates were cleaned up).
 - **Permission**: PM+ or booster role (see `hasBoosterOrAbove`).
 - **Options**: `ign` (required)
-- **Behavior**: Each ladder line shows **tier** and the **date** that `tier_results` row was created (when they were placed there), not the tester name.
+- **Behavior**: Each ladder line shows **tier** and, when `tier_results.created_at` is present, the **date that row was created** (treated as when they were placed in that tier). If there is no usable timestamp, only the ladder and tier are shown. The embed does **not** use a “last updated” footer timestamp (that was previously confused with placement date).
+
+### `/info`
+
+- **Description**: One-place **ephemeral** dossier for an IGN (Manager+).
+- **Default permission**: Manage Roles (**Manager+** in handler).
+- **Options**: `ign` (required)
+- **Behavior**: Three embeds — **current tiers** + **tier_history** (recent lines with `rated_at` when present), **fight** aggregate + recent `scores` rows, then **blacklists**, **admin_blacklists**, **timeouts**, **alts**, **application_denials** (if table exists and row active), **uuid_registry**. Long sections are truncated to Discord field limits.
 
 ### `/removetier`
 

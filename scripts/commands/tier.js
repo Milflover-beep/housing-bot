@@ -70,6 +70,14 @@ module.exports = function tierCommands(ctx) {
     await syncTierListChannel(interaction.client, pool);
   }
 
+  /** Discord date from DB timestamp; empty if missing/invalid. */
+  function tierPlacementSuffix(createdAt) {
+    if (createdAt == null) return '';
+    const ms = new Date(createdAt).getTime();
+    if (!Number.isFinite(ms)) return '';
+    return ` · <t:${Math.floor(ms / 1000)}:D>`;
+  }
+
   async function handleViewtier(interaction) {
     await defer(interaction, false);
     if (getMemberLevel(interaction.member) < 1 && !hasBoosterOrAbove(interaction.member)) {
@@ -91,16 +99,12 @@ module.exports = function tierCommands(ctx) {
       .setColor(0x9b59b6)
       .setDescription(
         r.rows
-          .map((row) => {
-            const ts = row.created_at
-              ? Math.floor(new Date(row.created_at).getTime() / 1000)
-              : null;
-            const when = ts ? `<t:${ts}:D>` : '—';
-            return `**${typeLetterToName(row.type)}** — ${row.tier} · ${when}`;
-          })
+          .map(
+            (row) =>
+              `**${typeLetterToName(row.type)}** — ${row.tier}${tierPlacementSuffix(row.created_at)}`
+          )
           .join('\n')
-      )
-      .setTimestamp();
+      );
     await interaction.editReply({ embeds: [embed] });
   }
 
