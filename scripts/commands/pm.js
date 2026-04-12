@@ -40,15 +40,18 @@ module.exports = function pmCommands(ctx) {
       else buckets.NA.push(r);
     }
     const section = (list) => truncateEmbedField(list.length ? list.map(formatPmRow).join('\n') : '_None_');
+    const fields = [
+      { name: 'Apex Manager', value: section(buckets.A), inline: false },
+      { name: 'Elite Manager', value: section(buckets.E), inline: false },
+      { name: 'Prime Manager', value: section(buckets.P), inline: false },
+    ];
+    if (buckets.NA.length > 0) {
+      fields.push({ name: 'N/A', value: section(buckets.NA), inline: false });
+    }
     const embed = new EmbedBuilder()
-      .setTitle('PM list')
+      .setTitle('📋 PM list')
       .setColor(0x1abc9c)
-      .addFields(
-        { name: 'Apex Manager', value: section(buckets.A), inline: false },
-        { name: 'Elite Manager', value: section(buckets.E), inline: false },
-        { name: 'Prime Manager', value: section(buckets.P), inline: false },
-        { name: 'N/A', value: section(buckets.NA), inline: false }
-      );
+      .addFields(...fields);
     await interaction.editReply({ embeds: [embed] });
   }
 
