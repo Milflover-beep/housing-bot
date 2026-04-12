@@ -18,7 +18,10 @@ const { PermissionFlagsBits } = require('discord.js');
 
 function parseSnowflake(s) {
   if (!s) return null;
-  const t = String(s).trim();
+  let t = String(s).trim();
+  t = t.replace(/^\uFEFF/, '');
+  t = t.replace(/\r/g, '');
+  t = t.replace(/^[`'"]+|['"`]+$/g, '').trim();
   return /^\d{17,20}$/.test(t) ? t : null;
 }
 
@@ -82,8 +85,19 @@ function applicantRoleIds() {
   return parseRoleIdList('BOT_ROLE_APPLICANT_ID');
 }
 
+/** True when BOT_ROLE_APPLICANT_ID is non-empty but parses to no valid snowflakes (quotes, typos, etc.). */
+function applicantRoleIdEnvPresentButInvalid() {
+  const raw = process.env.BOT_ROLE_APPLICANT_ID;
+  if (raw == null || !String(raw).trim()) return false;
+  return parseRoleIdList('BOT_ROLE_APPLICANT_ID').length === 0;
+}
+
 function applicantRoleName() {
-  return process.env.BOT_ROLE_APPLICANT_NAME || '[APPLICANT]';
+  const raw = process.env.BOT_ROLE_APPLICANT_NAME;
+  if (raw == null || !String(raw).trim()) return '[APPLICANT]';
+  let t = String(raw).trim().replace(/^\uFEFF/, '');
+  t = t.replace(/^[`'"]+|['"`]+$/g, '').trim();
+  return t || '[APPLICANT]';
 }
 
 /**
@@ -164,4 +178,5 @@ module.exports = {
   roleIds,
   applicantRoleName,
   applicantRoleIds,
+  applicantRoleIdEnvPresentButInvalid,
 };

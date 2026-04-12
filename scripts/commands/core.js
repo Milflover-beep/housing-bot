@@ -19,6 +19,7 @@ module.exports = function coreCommands(ctx) {
     normalizeIgn,
     applicantRoleIds,
     applicantRoleName,
+    applicantRoleIdEnvPresentButInvalid,
   } = ctx;
 
   function isBlacklisted(rows) {
@@ -175,7 +176,13 @@ module.exports = function coreCommands(ctx) {
             const name = applicantRoleName();
             const role = interaction.guild.roles.cache.find((r) => r.name === name);
             if (!role) {
-              roleNote = `\n\n⚠️ No role named **${name}**. Set **BOT_ROLE_APPLICANT_ID** to the role’s snowflake, or create a role with that exact name.`;
+              if (applicantRoleIdEnvPresentButInvalid()) {
+                roleNote =
+                  '\n\n⚠️ Applicant role: **BOT_ROLE_APPLICANT_ID** is set but is not a valid snowflake (17–20 digits, comma-separated). Remove quotes/spaces from the value or fix the ID. ' +
+                  'Alternatively set **BOT_ROLE_APPLICANT_NAME** to the role’s exact Discord name (e.g. `Premium/PM Applicant`).';
+              } else {
+                roleNote = `\n\n⚠️ No role named **${name}**. Set **BOT_ROLE_APPLICANT_ID** to the role’s snowflake, or set **BOT_ROLE_APPLICANT_NAME** to the role’s exact Discord name.`;
+              }
             } else if (!member.roles.cache.has(role.id)) {
               await member.roles.add(role);
             }
