@@ -82,7 +82,9 @@ module.exports = function coreCommands(ctx) {
     try {
       denialRows = await pool.query(
         `SELECT * FROM application_denials
-         WHERE discord_id = $1 AND cooldown_until > NOW()`,
+         WHERE discord_id = $1 AND cooldown_until > NOW()
+         ORDER BY cooldown_until DESC
+         LIMIT 1`,
         [discord]
       );
     } catch (e) {
@@ -137,7 +139,9 @@ module.exports = function coreCommands(ctx) {
 
     if (denialRows.rows.length > 0) {
       eligible = false;
-      issues.push('⏳ **Application cooldown** — **Yes** (cannot apply now).');
+      const d = denialRows.rows[0];
+      const ts = Math.floor(new Date(d.cooldown_until).getTime() / 1000);
+      issues.push(`⏳ **Application cooldown** — ends <t:${ts}:F> (<t:${ts}:R>)`);
     }
 
     /** Latest tier row per ladder (Prime / Elite / Apex). Re-applying on the same ladder is OK (higher tier goal). */
@@ -156,6 +160,14 @@ module.exports = function coreCommands(ctx) {
         }
       }
     }
+
+    if (applyLadderLetter === 'A' && !latestByLadder['E']) {
+      eligible = false;
+      issues.push(
+        '🔼 **Apex tryout** — they must already have **Elite** tier on file before applying for Apex.'
+      );
+    }
+
     const applyOrder = LADDER_ORDER[applyLadderLetter];
     if (maxHeldOrder > applyOrder && maxHeldLetter) {
       const held = latestByLadder[maxHeldLetter];
