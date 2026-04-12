@@ -1,7 +1,15 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = function pmCommands(ctx) {
-  const { pool, requireLevel, isAdminOrOwner, defer, normalizeIgn, resolveGuildMember } = ctx;
+  const {
+    pool,
+    requireLevel,
+    isAdminOrOwner,
+    defer,
+    normalizeIgn,
+    resolveGuildMember,
+    minecraftHeadUrl,
+  } = ctx;
   const mgr = PermissionFlagsBits.ManageRoles;
 
   const PM_MANAGER_CHOICES = [
@@ -160,7 +168,10 @@ module.exports = function pmCommands(ctx) {
       q.rows.length === 1
         ? `✅ Updated **${q.rows[0].ign}**.`
         : `✅ Updated **${q.rows.length}** PM list rows matching **${ign}**.`;
-    await interaction.editReply({ content: msg });
+    const embed = new EmbedBuilder().setColor(0x1abc9c).setDescription(msg);
+    const headUrl = minecraftHeadUrl(q.rows[0]?.ign || ign);
+    if (headUrl) embed.setThumbnail(headUrl);
+    await interaction.editReply({ embeds: [embed] });
   }
 
   async function handlePmstats(interaction) {

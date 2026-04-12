@@ -126,4 +126,17 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-client.login(process.env.BOT_TOKEN);
+client.login(process.env.BOT_TOKEN).catch((err) => {
+  const msg = String(err?.message || err);
+  if (/disallowed intents/i.test(msg)) {
+    console.error(
+      '❌ Discord: "Used disallowed intents" — the bot is requesting an intent that is not enabled for this application.\n' +
+        'If **ENABLE_GUILD_MEMBERS_INTENT=true**: open https://discord.com/developers/applications → your app → **Bot** → ' +
+        'Privileged Gateway Intents → turn on **Server Members Intent** → Save, then restart the bot.\n' +
+        'Or set **ENABLE_GUILD_MEMBERS_INTENT=false** (or remove it) in Railway until you enable that toggle (some member/role checks may fail).'
+    );
+  } else {
+    console.error('❌ Login failed:', err);
+  }
+  process.exit(1);
+});

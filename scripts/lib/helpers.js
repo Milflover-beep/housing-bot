@@ -120,10 +120,18 @@ function errorEmbed(title, body) {
   return new EmbedBuilder().setColor(0xed4245).setTitle(title).setDescription(body);
 }
 
+/** HTTPS URL for a Minecraft helm render (embed thumbnail). Uses Minotar: /helm/{ign}/64.png */
+function minecraftHeadUrl(ign) {
+  const raw = String(ign || '').trim();
+  if (!raw) return null;
+  return `https://minotar.net/helm/${encodeURIComponent(raw)}/64.png`;
+}
+
 module.exports = {
   VALID_TIERS,
   TIER_ORDER,
   normalizeIgn,
+  minecraftHeadUrl,
   tierRank,
   typeLetterToName,
   parseDurationToDate,

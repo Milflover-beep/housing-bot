@@ -17,6 +17,7 @@ module.exports = function coreCommands(ctx) {
     VALID_TIERS,
     defer,
     normalizeIgn,
+    minecraftHeadUrl,
     applicantRoleIds,
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
@@ -229,6 +230,9 @@ module.exports = function coreCommands(ctx) {
       embed.setDescription(`⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}`);
     }
 
+    const headUrl = minecraftHeadUrl(ign);
+    if (headUrl) embed.setThumbnail(headUrl);
+
     await interaction.editReply({ embeds: [embed] });
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
@@ -379,6 +383,9 @@ module.exports = function coreCommands(ctx) {
           (showIds ? ' · IDs for /updatescore' : ''),
       })
       .setTimestamp();
+
+    const headUrl = minecraftHeadUrl(ignDisplay);
+    if (headUrl) embed.setThumbnail(headUrl);
 
     return {
       embed,
