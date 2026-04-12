@@ -5,6 +5,32 @@ const VALID_TIERS = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D'
 
 const TIER_ORDER = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'N/A'];
 
+/**
+ * Map a tier string from Excel or legacy data to a VALID_TIERS label.
+ * Removed tiers (e.g. F) → D. Legacy HB → B-. Empty/unknown → D.
+ */
+function normalizeTierLabelForDb(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return 'D';
+  const u = s.toUpperCase();
+  if (u === 'HB') return 'B-';
+  for (const v of VALID_TIERS) {
+    if (v.toUpperCase() === u) return v;
+  }
+  return 'D';
+}
+
+/** Coerce tier_results ladder column to P | E | A. Returns null if unrecognized. */
+function normalizeLadderTypeForDb(raw) {
+  const s = String(raw ?? '')
+    .trim()
+    .toLowerCase();
+  if (['p', 'prime'].includes(s)) return 'P';
+  if (['e', 'elite'].includes(s)) return 'E';
+  if (['a', 'apex'].includes(s)) return 'A';
+  return null;
+}
+
 /** Minecraft IGNs are matched case-insensitively (trim + lowercase for DB keys). */
 function normalizeIgn(s) {
   return String(s || '').trim().toLowerCase();
@@ -144,6 +170,8 @@ module.exports = {
   VALID_TIERS,
   TIER_ORDER,
   normalizeIgn,
+  normalizeTierLabelForDb,
+  normalizeLadderTypeForDb,
   minecraftHeadUrl,
   tierRank,
   typeLetterToName,

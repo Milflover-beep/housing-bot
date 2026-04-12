@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
 const { Pool } = require('pg');
+const { normalizeTierLabelForDb, normalizeLadderTypeForDb } = require('./lib/helpers');
 
 const RESET = process.argv.includes('--reset');
 const XLSX_PATH = process.env.SEED_XLSX_PATH
@@ -263,14 +264,22 @@ async function seed() {
     console.log(`✓ tier_list_messages: ${tier_list_messages.length} rows`);
 
     const tier_results = getRows('tier_results');
+    let tierSkipped = 0;
     for (const row of tier_results) {
+      const ladder = normalizeLadderTypeForDb(row.type);
+      if (!ladder) {
+        tierSkipped += 1;
+        console.warn(`  skip tier_results id=${row.id} ign=${row.ign} bad type=${row.type}`);
+        continue;
+      }
+      const tier = normalizeTierLabelForDb(row.tier);
       await client.query(
         `INSERT INTO tier_results (id, ign, type, tier, discord_id, created_at, tester)
          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
-        [row.id, row.ign, row.type, row.tier, row.discord_id ?? null, excelDate(row.created_at), row.tester ?? null]
+        [row.id, row.ign, ladder, tier, row.discord_id ?? null, excelDate(row.created_at), row.tester ?? null]
       );
     }
-    console.log(`✓ tier_results: ${tier_results.length} rows`);
+    console.log(`✓ tier_results: ${tier_results.length} rows (${tierSkipped} skipped bad ladder type)`);
 
     const timeouts = getRows('timeouts');
     for (const row of timeouts) {
