@@ -39,12 +39,12 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
 ### `/check`
 
 - **Description**: Check if a player is eligible for a tryout/application for a given rank ladder.
-- **Default permission**: Manage Roles (bot also requires **Staff+**).
+- **Default permission**: None at the Discord level (the bot requires **PM+** by role).
 - **Options**:
   - `ign` (string, required) — Minecraft IGN, or **UUID** when the value is longer than 16 characters (passed to Hypixel as `name` vs `uuid`).
   - `discord` (user, required) — linked Discord account (cooldown + applicant role).
   - `rank-type` (choice, required) — `Prime` | `Elite` | `Apex` (must match the ladder you’re checking).
-- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**. When the API **succeeds**, players must be **network level 30+** with a real profile or the check is **not eligible** (red). When the API **fails** (HTTP errors, rate limits, missing key, bad JSON, etc.), **Hypixel is not enforced** for that run — pass/fail follows only the other rules below, and an embed field tells staff to use **`/hypixel`** to verify level manually. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, “applying below current ladder”) can yield **eligible with warnings** (amber). **Known alts** are not included in the public embed; the runner gets an **ephemeral** follow-up with alt details only. Full pass (green) assigns the applicant role when configured (including when the only extra context was alts).
+- **Behavior**: Calls the **Hypixel** `GET /v2/player` API (`HYPIXEL_API_KEY`) using `player.networkExp` and the standard formula for **network level**. When the API **succeeds**, players must be **network level 30+** with a real profile or the check is **not eligible** (red). When the API **fails** (HTTP errors, rate limits, missing key, bad JSON, etc.), **Hypixel is not enforced** for that run — pass/fail follows only the other rules below, and an embed field tells staff to use **`/hypixel`** to verify level manually. Then queries `blacklists` (active: no expiry or expiry in the future), `admin_blacklists` (non‑pardoned), timeouts, alts, latest `tier_results` per ladder, and **application denial cooldown** (`application_denials` for that Discord user). **Blacklist / admin blacklist / denial cooldown** set **not eligible** (red). Other notes (timeout, “applying below current ladder”) can yield **eligible with warnings** (amber). **Known alts** are not included in the public embed; the invoker gets an **ephemeral** follow-up with alt details (PM+ and Staff+). **PM-only** runners see an extra line to **ping a Manager or Admin** if they need help. Full pass (green) assigns the applicant role when configured (including when the only extra context was alts).
 
 ### `/hypixel`
 
@@ -277,9 +277,9 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Default permission**: Manage Roles (**Manager+**).
 - **Options**: `id` (integer) — id shown in `/history`.
 
-### Cooldown expiry pings (background)
+### Punishment ended pings (background)
 
-- **Poller** (`scripts/lib/punishmentExpiryPoller.js`): when `reversal_remind_at` passes, posts **Punishment expired** to the pings channel (embed with details, no evidence). Configure **`PUNISHMENT_PINGS_CHANNEL_ID`** or **`PINGS_CHANNEL_ID`**. Role: **`PUNISHMENT_STAFF_ROLE_ID`** or **`STAFF_PING_ROLE_ID`**. Rows are claimed atomically; deleted logs do not ping.
+- **Poller** (`scripts/lib/punishmentExpiryPoller.js`): when `reversal_remind_at` passes, posts **Punishment expired** to the pings channel (embed with details, no evidence; embed field **Punishment ended** for the reminder time). Configure **`PUNISHMENT_PINGS_CHANNEL_ID`** or **`PINGS_CHANNEL_ID`**. Role: **`PUNISHMENT_STAFF_ROLE_ID`** or **`STAFF_PING_ROLE_ID`**. Rows are claimed atomically; deleted logs do not ping.
 
 ---
 
@@ -494,8 +494,11 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 | `FIGHT_SCORE_LOG_CHANNEL_ID` | Channel for **Fight Score Logged** / **Fight Score Edited** embeds from `/score` and `/updatescore` |
 | `TIERLIST_PUBLIC_CHANNEL_ID` | Public tier list channel (preferred); falls back to `TIERLIST_CHANNEL_ID` |
 | `TIERLIST_CHANNEL_ID` | Legacy fallback for tier list channel |
-| `PUNISHMENT_PINGS_CHANNEL_ID` or `PINGS_CHANNEL_ID` | Channel for **punishment cooldown ended** (unban reminder) pings |
-| `PUNISHMENT_STAFF_ROLE_ID` or `STAFF_PING_ROLE_ID` | Role to @mention on cooldown expiry |
+| `PUNISHMENT_PINGS_CHANNEL_ID` or `PINGS_CHANNEL_ID` | Channel for **punishment ended** (scheduled reminder) pings |
+| `PUNISHMENT_STAFF_ROLE_ID` or `STAFF_PING_ROLE_ID` | Role to @mention when a punishment reminder fires |
+| `ACCEPT_NOTIFY_CHANNEL_ID` | Channel for **Rank Request** embed when staff uses `/accept` |
+| `ACCEPT_PING_ROLE_ID` | Optional: role to @mention on `/accept` (overrides rank-request ping) |
+| `RANK_REQUEST_PING_ROLE_ID` | Role to @mention on `/accept` if `ACCEPT_PING_ROLE_ID` unset (defaults in code to the server’s rank-request role) |
 | `HELP_STAFF_ROLE_ID`, `HELP_CHANNEL_ID` | `/help` mentions |
 | `CHECK_LEVELBOT_MESSAGE`, `CHECK_LEVELBOT_WHEN` | Optional extra channel message after `/check` (`always` / `pass` / `fail`) |
 | `HYPIXEL_API_KEY` | Hypixel API key for `/check` network level (30+) verification |

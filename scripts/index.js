@@ -38,7 +38,7 @@ client.once(Events.ClientReady, async () => {
   startPunishmentExpiryPoller(client, pool);
   if (!getPunishmentPingsChannelId()) {
     console.warn(
-      '⚠️ Punishment cooldown pings are OFF: set PUNISHMENT_PINGS_CHANNEL_ID, PINGS_CHANNEL_ID, or PUNISHMENT_ACCEPT_NOTIFY_CHANNEL_ID in .env'
+      '⚠️ Punishment ended pings are OFF: set PUNISHMENT_PINGS_CHANNEL_ID, PINGS_CHANNEL_ID, or PUNISHMENT_ACCEPT_NOTIFY_CHANNEL_ID in .env'
     );
   }
   console.log(`✅ Logged in as ${client.user.tag}`);

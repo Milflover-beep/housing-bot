@@ -28,7 +28,7 @@ function buildExpiryEmbed(row) {
         inline: true,
       },
       {
-        name: '⏰ Cooldown ended',
+        name: '⏰ Punishment ended',
         value: exp ? new Date(exp).toLocaleString() : '—',
         inline: true,
       },
@@ -40,7 +40,7 @@ function buildExpiryEmbed(row) {
 
 /**
  * When a manager accepts /checkqueue, `reversal_remind_at` = DB time at accept + cooldown (from `cooldown_raw`).
- * This loop finds rows where that time has passed and posts a ping. Poll often enough for short cooldowns (e.g. 1m).
+ * This loop finds rows where that time has passed and posts a ping. Poll often enough for short post-accept windows (e.g. 1m).
  */
 function startPunishmentExpiryPoller(client, pool) {
   const intervalMs = 15_000;

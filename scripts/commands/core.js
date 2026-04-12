@@ -23,6 +23,7 @@ module.exports = function coreCommands(ctx) {
     applicantRoleIds,
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
+    resolveGuildMember,
   } = ctx;
 
   function isBlacklisted(rows) {
@@ -42,8 +43,12 @@ module.exports = function coreCommands(ctx) {
 
   async function handleCheck(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff only.' });
+    const runner = await resolveGuildMember(interaction);
+    if (!runner || !requireLevel(runner, 1)) {
+      return interaction.editReply({
+        content:
+          '❌ PM or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+      });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const discordUser = interaction.options.getUser('discord', true);
@@ -174,11 +179,15 @@ module.exports = function coreCommands(ctx) {
       );
     }
 
-    /** Alts are never shown on the public reply — staff-only ephemeral follow-up. */
+    /** Alts are never shown on the public reply — ephemeral follow-up to the invoker only. */
     let altStaffMessage = '';
     if (altRows.rows.length > 0) {
       const altList = altRows.rows.map((a) => `\`${a.original_ign}\` → \`${a.alt_ign}\``).join('\n');
-      altStaffMessage = `🔀 **Staff only — known alts on file for \`${ign}\`:**\n${altList}`;
+      altStaffMessage = `🔀 **Known alts on file for \`${ign}\`** (only you can see this message):\n${altList}`;
+      if (getMemberLevel(runner) < 2) {
+        altStaffMessage +=
+          '\n\nIf you need help with this applicant, **ping a Manager or Admin**.';
+      }
     }
 
     /** Full pass: no hard blocks and no public notes (timeouts, ladder mismatch, etc.). Applicant role only here. */
@@ -586,11 +595,10 @@ module.exports = function coreCommands(ctx) {
       add('Booster+ / PM+', ['`/tierlist` — tier list', '`/viewtier` — view a player tier']);
     }
     if (lv >= 1) {
-      add('PM+', ['`/pmstats`']);
+      add('PM+', ['`/pmstats`', '`/check`']);
     }
     if (lv >= 2) {
       add('Staff+', [
-        '`/check`',
         '`/hypixel`',
         '`/deny`',
         '`/accept`',
@@ -693,8 +701,7 @@ module.exports = function coreCommands(ctx) {
             { name: 'Elite', value: 'elite' },
             { name: 'Apex', value: 'apex' }
           )
-      )
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+      ),
 
     new SlashCommandBuilder()
       .setName('score')

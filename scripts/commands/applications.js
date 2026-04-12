@@ -12,7 +12,6 @@ module.exports = function applicationsCommands(ctx) {
     normalizeIgn,
     applicantRoleName,
     applicantRoleIds,
-    roleIds,
     parseRoleIdList,
     resolveGuildMember,
   } = ctx;
@@ -38,12 +37,15 @@ module.exports = function applicationsCommands(ctx) {
     }
   }
 
-  /** Role to ping on /accept: ACCEPT_PING_ROLE_ID else first BOT_ROLE_MANAGER_ID. */
+  /** Role to ping on /accept rank-request message: ACCEPT_PING_ROLE_ID, else RANK_REQUEST_PING_ROLE_ID, else default. */
+  const DEFAULT_RANK_REQUEST_PING_ROLE_ID = '1141836985711997039';
+
   function acceptPingRoleId() {
-    const fromEnv = parseRoleIdList('ACCEPT_PING_ROLE_ID');
-    if (fromEnv.length > 0) return fromEnv[0];
-    const mgrIds = roleIds('manager');
-    return mgrIds[0] ?? null;
+    const fromAccept = parseRoleIdList('ACCEPT_PING_ROLE_ID');
+    if (fromAccept.length > 0) return fromAccept[0];
+    const fromRank = parseRoleIdList('RANK_REQUEST_PING_ROLE_ID');
+    if (fromRank.length > 0) return fromRank[0];
+    return DEFAULT_RANK_REQUEST_PING_ROLE_ID;
   }
 
   async function handleClearcooldown(interaction) {
@@ -169,9 +171,6 @@ module.exports = function applicationsCommands(ctx) {
     let note = '';
     if (!notifyChannelId) {
       note = '\n\n⚠️ Set **ACCEPT_NOTIFY_CHANNEL_ID** in the bot environment to post rank-request embeds.';
-    } else if (!pingRoleId) {
-      note =
-        '\n\n⚠️ Set **ACCEPT_PING_ROLE_ID** or **BOT_ROLE_MANAGER_ID** so /accept can ping managers.';
     }
 
     await interaction.editReply({
