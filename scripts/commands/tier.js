@@ -163,21 +163,20 @@ module.exports = function tierCommands(ctx) {
     );
     const rows = [...res.rows].sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
     const name = typeLetterToName(letter);
+    const heading = `# 🏆 ${name} tier list`;
     const body = rows.length
       ? rows.map((r) => `**${r.ign}** — ${r.tier}`).join('\n')
       : '_Empty._';
     const MAX = 4096;
-    let desc = body;
+    const overhead = heading.length + 2;
     let truncated = false;
-    if (body.length > MAX) {
+    let listPart = body;
+    if (overhead + body.length > MAX) {
       truncated = true;
-      desc = `${body.slice(0, MAX - 40)}\n… _(truncated)_`;
+      listPart = `${body.slice(0, MAX - overhead - 40)}\n… _(truncated)_`;
     }
-    const embed = new EmbedBuilder()
-      .setTitle(`${name} tier list`)
-      .setColor(0x3498db)
-      .setDescription(desc)
-      .setTimestamp();
+    const desc = `${heading}\n\n${listPart}`;
+    const embed = new EmbedBuilder().setColor(0x3498db).setDescription(desc).setTimestamp();
     if (truncated) {
       embed.setFooter({
         text: `${rows.length} players — list cut at Discord limit; lower grades sort last.`,

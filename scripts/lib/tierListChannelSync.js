@@ -97,12 +97,11 @@ async function buildCombinedEmbeds(pool) {
     const res = await pool.query(selectCurrentTierRowsSql(), [letter]);
     const rows = [...res.rows];
     const typeName = typeLetterToName(letter);
-    const desc = buildTierListEmbedDescription(rows);
+    const heading = `# 🏆 ${typeName} tier list`;
+    const body = buildTierListEmbedDescription(rows);
+    const desc = `${heading}\n\n${body}`.slice(0, 4096);
     embeds.push(
-      new EmbedBuilder()
-        .setTitle(`🏆 ${typeName} tier list`)
-        .setColor(LADDER_COLORS[letter] || 0x5865f2)
-        .setDescription(desc)
+      new EmbedBuilder().setColor(LADDER_COLORS[letter] || 0x5865f2).setDescription(desc)
     );
   }
   return embeds;
