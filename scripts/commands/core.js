@@ -725,7 +725,8 @@ module.exports = function coreCommands(ctx) {
           .addChoices(
             { name: 'Prime', value: 'prime' },
             { name: 'Elite', value: 'elite' },
-            { name: 'Apex', value: 'apex' }
+            { name: 'Apex', value: 'apex' },
+            { name: 'PM', value: 'pm' }
           )
       ),
 

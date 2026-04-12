@@ -83,7 +83,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `winner-ign`, `loser-ign` (string, required)
   - `final-score` (string, required) — e.g. `10-8`
   - `fight-number` (integer, required)
-  - `fight-type` (choice, required) — Prime | Elite | Apex
+  - `fight-type` (choice, required) — Prime | Elite | Apex | PM
 - **Behavior**: Inserts into `scores` (`RETURNING *`). Reply embed matches the **fight log** format plus **Fight ID** for staff. Sends a **second message** (no ping) to the fight log channel: embed **Fight Score Logged** (green), winner head thumbnail via `https://minotar.net/helm/<winner>/64.png`, fields Winner / Loser / Score / Fight # / Fight Type / Date — see `scripts/lib/fightScoreLogEmbed.js`. Channel: `FIGHT_SCORE_LOG_CHANNEL_ID` (default in code if unset).
 
 ### `/fighthistory`

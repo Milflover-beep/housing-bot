@@ -12,6 +12,7 @@ function formatFightType(ft) {
   if (s === 'prime') return 'Prime';
   if (s === 'elite') return 'Elite';
   if (s === 'apex') return 'Apex';
+  if (s === 'pm') return 'PM';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 

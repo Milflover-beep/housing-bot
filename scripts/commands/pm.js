@@ -72,6 +72,7 @@ module.exports = function pmCommands(ctx) {
       if (s === 'prime' || s === 'p') return 'Prime';
       if (s === 'elite' || s === 'e') return 'Elite';
       if (s === 'apex' || s === 'a') return 'Apex';
+      if (s === 'pm') return 'PM';
       return ft ? String(ft) : 'Other';
     };
 
