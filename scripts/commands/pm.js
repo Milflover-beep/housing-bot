@@ -193,7 +193,6 @@ module.exports = function pmCommands(ctx) {
       `**PM score** — in wins: avg **${fmtNum(mean(pmPtsWins))}** · in losses: avg **${fmtNum(mean(pmPtsLoss))}**`,
       `**Opp score** — in wins: avg **${fmtNum(mean(oppPtsWins))}** · in losses: avg **${fmtNum(mean(oppPtsLoss))}**`,
       `**Total points / fight** (both players): avg **${fmtNum(mean(totalPtsPerFight))}**`,
-      '_Per-side points clamp at **10** for these stats (raw DB can show 12–10 overtime or mis-logs)._',
     ].join('\n');
 
     const streakBlock = [

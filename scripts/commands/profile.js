@@ -105,10 +105,13 @@ module.exports = function profileCommands(ctx) {
       ? `**${typeLetterToName(tr.type)}** \`${tierLabel}\``
       : 'Not placed in a tier.';
 
-    const onTryoutCooldown = Boolean(denialRow.rows?.length > 0);
-    const noteParts = [
-      `⏳ **Tryout cooldown (active now):** ${onTryoutCooldown ? '**Yes**' : '**No**'}`,
-    ];
+    let cooldownLine = '⏳ **Tryout cooldown:** None';
+    if (denialRow.rows?.length > 0) {
+      const d = denialRow.rows[0];
+      const ts = Math.floor(new Date(d.cooldown_until).getTime() / 1000);
+      cooldownLine = `⏳ **Tryout cooldown:** <t:${ts}:R> (<t:${ts}:F>)`;
+    }
+    const noteParts = [cooldownLine];
 
     const embed = new EmbedBuilder()
       .setTitle(`📋 Profile: ${ign}`)
@@ -120,9 +123,7 @@ module.exports = function profileCommands(ctx) {
         { name: 'Losses', value: String(losses), inline: true },
         {
           name: 'Win rate',
-          value: `${wr}%${
-            avgScore != null ? ` · Avg **${avgScore}** pts/fight (each side capped at 10)` : ''
-          }`,
+          value: `${wr}%${avgScore != null ? ` · Avg **${avgScore}** pts/fight` : ''}`,
           inline: true,
         },
         { name: 'Total fights', value: String(total), inline: true },
