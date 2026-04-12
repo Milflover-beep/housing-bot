@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { tierRank, tierResultsLadderSqlParam } = require('./helpers');
+const { tierRank, tierResultsLadderSqlParam, tierListExcludePmManagerSql } = require('./helpers');
 
 const DEFAULT_TIERLIST_CHANNEL_ID = '1472779161352274076';
 
@@ -23,12 +23,13 @@ function typeLetterToName(letter) {
   return m[letter] || letter;
 }
 
-/** Latest row per IGN within a ladder (handles legacy duplicate rows + legacy type strings). */
+/** Latest row per IGN within a ladder; omits PM staff for that ladder (see pm_list.manager_type). */
 function selectCurrentTierRowsSql() {
-  return `SELECT DISTINCT ON (LOWER(ign)) ign, tier
-          FROM tier_results
-          WHERE ${tierResultsLadderSqlParam()}
-          ORDER BY LOWER(ign), id DESC`;
+  return `SELECT DISTINCT ON (LOWER(tr.ign)) tr.ign, tr.tier
+          FROM tier_results tr
+          WHERE ${tierResultsLadderSqlParam('tr')}
+            AND ${tierListExcludePmManagerSql('tr', 'pm')}
+          ORDER BY LOWER(tr.ign), tr.id DESC`;
 }
 
 /** Map letter grade to S/A/B/C/D bucket for public list layout. */

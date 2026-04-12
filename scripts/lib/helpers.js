@@ -121,15 +121,27 @@ function errorEmbed(title, body) {
 }
 
 /**
- * SQL WHERE fragment for tier_results ladder column `type`.
- * Matches P/E/A plus legacy full words (prime, elite, apex) case-insensitively.
- * Use with parameter $1 ∈ { 'P', 'E', 'A' }.
+ * SQL fragment: tier_results row belongs to ladder $1 (P/E/A), including legacy type strings.
+ * @param {string} [alias] table alias e.g. 'tr' — required when joining/aliasing
  */
-function tierResultsLadderSqlParam() {
+function tierResultsLadderSqlParam(alias = '') {
+  const c = alias ? `${alias}.` : '';
   return `(
-    ($1::text = 'P' AND LOWER(TRIM(type)) IN ('p', 'prime')) OR
-    ($1::text = 'E' AND LOWER(TRIM(type)) IN ('e', 'elite')) OR
-    ($1::text = 'A' AND LOWER(TRIM(type)) IN ('a', 'apex'))
+    ($1::text = 'P' AND LOWER(TRIM(${c}type)) IN ('p', 'prime')) OR
+    ($1::text = 'E' AND LOWER(TRIM(${c}type)) IN ('e', 'elite')) OR
+    ($1::text = 'A' AND LOWER(TRIM(${c}type)) IN ('a', 'apex'))
+  )`;
+}
+
+/**
+ * Exclude IGNs that are PM staff for the same ladder (pm_list.manager_type = P/E/A).
+ * Stops tier lists from duplicating /pmlist manager sections. $1 = ladder letter.
+ */
+function tierListExcludePmManagerSql(trAlias = 'tr', pmAlias = 'pm') {
+  return `NOT EXISTS (
+    SELECT 1 FROM pm_list ${pmAlias}
+    WHERE LOWER(TRIM(${pmAlias}.ign)) = LOWER(TRIM(${trAlias}.ign))
+      AND ${pmAlias}.manager_type = $1
   )`;
 }
 
@@ -156,4 +168,5 @@ module.exports = {
   getSlashSubcommand,
   resolveGuildMember,
   tierResultsLadderSqlParam,
+  tierListExcludePmManagerSql,
 };

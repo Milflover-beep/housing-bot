@@ -14,6 +14,7 @@ module.exports = function tierCommands(ctx) {
     defer,
     normalizeIgn,
     tierResultsLadderSqlParam,
+    tierListExcludePmManagerSql,
   } = ctx;
 
   async function submitRating(interaction, fixedType) {
@@ -154,10 +155,11 @@ module.exports = function tierCommands(ctx) {
     const fightType = interaction.options.getString('type');
     const letter = fightType === 'prime' ? 'P' : fightType === 'elite' ? 'E' : 'A';
     const res = await pool.query(
-      `SELECT DISTINCT ON (LOWER(ign)) ign, tier, tester, created_at
-       FROM tier_results
-       WHERE ${tierResultsLadderSqlParam()}
-       ORDER BY LOWER(ign), id DESC`,
+      `SELECT DISTINCT ON (LOWER(tr.ign)) tr.ign, tr.tier, tr.tester, tr.created_at
+       FROM tier_results tr
+       WHERE ${tierResultsLadderSqlParam('tr')}
+         AND ${tierListExcludePmManagerSql('tr', 'pm')}
+       ORDER BY LOWER(tr.ign), tr.id DESC`,
       [letter]
     );
     const rows = [...res.rows].sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
