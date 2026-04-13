@@ -23,6 +23,7 @@ module.exports = function coreCommands(ctx) {
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
     resolveGuildMember,
+    clampSideScoreForStats,
   } = ctx;
 
   const CHECK_RENAME_CATEGORY_IDS = String(process.env.CHECK_RENAME_CATEGORY_IDS || '')
@@ -60,6 +61,127 @@ module.exports = function coreCommands(ctx) {
       if (!row.blacklist_expires) return true;
       return new Date(row.blacklist_expires) > new Date();
     });
+  }
+
+  function parseFinalScoreForDebug(str) {
+    const m = String(str ?? '')
+      .trim()
+      .match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    if (!m) return null;
+    const winnerPts = parseInt(m[1], 10);
+    const loserPts = parseInt(m[2], 10);
+    if (!Number.isFinite(winnerPts) || !Number.isFinite(loserPts)) return null;
+    return { winnerPts, loserPts };
+  }
+
+  function mean(nums) {
+    if (!nums.length) return null;
+    return nums.reduce((a, b) => a + b, 0) / nums.length;
+  }
+
+  function fmtNum(n, digits = 2) {
+    if (n === null || n === undefined || Number.isNaN(n)) return '—';
+    return Number(n).toFixed(digits);
+  }
+
+  function buildFightHistoryDebugEmbed(ignLower, rows) {
+    const byType = {};
+    let unparseable = 0;
+    const chronological = [];
+    const margins = [];
+    const ownPts = [];
+    const oppPts = [];
+
+    const typeKey = (ft) => {
+      const s = String(ft || '').toLowerCase();
+      if (s === 'prime' || s === 'p') return 'Prime';
+      if (s === 'elite' || s === 'e') return 'Elite';
+      if (s === 'apex' || s === 'a') return 'Apex';
+      if (s === 'pm') return 'PM';
+      return ft ? String(ft) : 'Other';
+    };
+
+    for (const r of rows) {
+      const won = String(r.winner_ign || '').trim().toLowerCase() === ignLower;
+      const tk = typeKey(r.fight_type);
+      if (!byType[tk]) byType[tk] = { w: 0, l: 0 };
+      if (won) byType[tk].w += 1;
+      else byType[tk].l += 1;
+      chronological.push(won ? 'W' : 'L');
+
+      const parsed = parseFinalScoreForDebug(r.final_score);
+      if (!parsed) {
+        unparseable += 1;
+        continue;
+      }
+      const wC = clampSideScoreForStats(parsed.winnerPts);
+      const lC = clampSideScoreForStats(parsed.loserPts);
+      const mine = won ? wC : lC;
+      const theirs = won ? lC : wC;
+      ownPts.push(mine);
+      oppPts.push(theirs);
+      margins.push(mine - theirs);
+    }
+
+    let bestWinStreak = 0;
+    let bestLossStreak = 0;
+    let curW = 0;
+    let curL = 0;
+    for (const c of chronological) {
+      if (c === 'W') {
+        curW += 1;
+        curL = 0;
+        bestWinStreak = Math.max(bestWinStreak, curW);
+      } else {
+        curL += 1;
+        curW = 0;
+        bestLossStreak = Math.max(bestLossStreak, curL);
+      }
+    }
+
+    const lines = Object.keys(byType)
+      .sort()
+      .map((k) => {
+        const { w, l } = byType[k];
+        const t = w + l;
+        const pct = t ? ((w / t) * 100).toFixed(1) : '0.0';
+        return `**${k}** — ${w}W / ${l}L (${pct}%)`;
+      });
+
+    const total = rows.length;
+    const wins = chronological.filter((v) => v === 'W').length;
+    const losses = total - wins;
+    const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
+
+    return new EmbedBuilder()
+      .setTitle(`Fight history (debug): ${ignLower}`)
+      .setColor(0x7b1fa2)
+      .setDescription('Staff-only debug stats from all non-voided fights.')
+      .addFields(
+        {
+          name: 'Overview',
+          value:
+            `**Fights:** ${total} (${wins}W / ${losses}L) · **Win rate:** ${winRate}%` +
+            (unparseable ? `\n⚠️ Unparseable final_score: ${unparseable}` : ''),
+          inline: false,
+        },
+        {
+          name: 'Scoring',
+          value: [
+            `**Avg margin (you - opp):** ${fmtNum(mean(margins))}`,
+            `**Avg your points:** ${fmtNum(mean(ownPts))}`,
+            `**Avg opponent points:** ${fmtNum(mean(oppPts))}`,
+          ].join('\n'),
+          inline: false,
+        },
+        { name: 'By fight type', value: lines.length ? lines.join('\n') : '_No fights_', inline: false },
+        {
+          name: 'Streaks',
+          value: `Best win streak: **${bestWinStreak}**\nBest loss streak: **${bestLossStreak}**`,
+          inline: false,
+        }
+      )
+      .setTimestamp();
   }
 
   async function handleCheck(interaction) {
@@ -509,8 +631,25 @@ module.exports = function coreCommands(ctx) {
     const headUrl = minecraftHeadUrl(ignDisplay);
     if (headUrl) embed.setThumbnail(headUrl);
 
+    let debugEmbed = null;
+    if (showIds) {
+      const debugRows = await pool.query(
+        `SELECT winner_ign, loser_ign, final_score, fight_type, created_at
+         FROM scores
+         WHERE (LOWER(winner_ign) = $1 OR LOWER(loser_ign) = $1) AND is_voided = false
+         ORDER BY created_at ASC, id ASC
+         LIMIT 3000`,
+        [ignLower]
+      );
+      debugEmbed = buildFightHistoryDebugEmbed(ignLower, debugRows.rows);
+      if (debugRows.rows.length >= 3000) {
+        debugEmbed.setFooter({ text: 'Debug stats use first 3000 fights (chronological).' });
+      }
+    }
+
     return {
       embed,
+      debugEmbed,
       components: fightHistoryComponents(ignLower, safePage, totalPages, showIds),
     };
   }
@@ -532,7 +671,7 @@ module.exports = function coreCommands(ctx) {
       return interaction.editReply({ content: payload.error });
     }
     await interaction.editReply({
-      embeds: [payload.embed],
+      embeds: payload.debugEmbed ? [payload.embed, payload.debugEmbed] : [payload.embed],
       components: payload.components,
     });
   }
@@ -565,7 +704,7 @@ module.exports = function coreCommands(ctx) {
       return interaction.editReply({ content: payload.error, embeds: [], components: [] });
     }
     await interaction.editReply({
-      embeds: [payload.embed],
+      embeds: payload.debugEmbed ? [payload.embed, payload.debugEmbed] : [payload.embed],
       components: payload.components,
     });
     return true;
