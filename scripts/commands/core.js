@@ -84,7 +84,7 @@ module.exports = function coreCommands(ctx) {
     return Number(n).toFixed(digits);
   }
 
-  function buildFightHistoryDebugEmbed(ignLower, rows) {
+  function buildFightHistoryDebugFields(ignLower, rows) {
     const byType = {};
     let unparseable = 0;
     const chronological = [];
@@ -153,34 +153,30 @@ module.exports = function coreCommands(ctx) {
     const losses = total - wins;
     const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
 
-    return new EmbedBuilder()
-      .setTitle(`Fight history (debug): ${ignLower}`)
-      .setColor(0x7b1fa2)
-      .addFields(
-        {
-          name: 'Overview',
-          value:
-            `**Fights:** ${total} (${wins}W / ${losses}L) · **Win rate:** ${winRate}%` +
-            (unparseable ? `\n⚠️ Unparseable final_score: ${unparseable}` : ''),
-          inline: false,
-        },
-        {
-          name: 'Scoring',
-          value: [
-            `**Avg margin (you - opp):** ${fmtNum(mean(margins))}`,
-            `**Avg your points:** ${fmtNum(mean(ownPts))}`,
-            `**Avg opponent points:** ${fmtNum(mean(oppPts))}`,
-          ].join('\n'),
-          inline: false,
-        },
-        { name: 'By fight type', value: lines.length ? lines.join('\n') : '_No fights_', inline: false },
-        {
-          name: 'Streaks',
-          value: `Best win streak: **${bestWinStreak}**\nBest loss streak: **${bestLossStreak}**`,
-          inline: false,
-        }
-      )
-      .setTimestamp();
+    return [
+      {
+        name: 'Debug overview',
+        value:
+          `**Fights:** ${total} (${wins}W / ${losses}L) · **Win rate:** ${winRate}%` +
+          (unparseable ? `\n⚠️ Unparseable final_score: ${unparseable}` : ''),
+        inline: false,
+      },
+      {
+        name: 'Debug scoring',
+        value: [
+          `**Avg margin (you - opp):** ${fmtNum(mean(margins))}`,
+          `**Avg your points:** ${fmtNum(mean(ownPts))}`,
+          `**Avg opponent points:** ${fmtNum(mean(oppPts))}`,
+        ].join('\n'),
+        inline: false,
+      },
+      { name: 'Debug by fight type', value: lines.length ? lines.join('\n') : '_No fights_', inline: false },
+      {
+        name: 'Debug streaks',
+        value: `Best win streak: **${bestWinStreak}**\nBest loss streak: **${bestLossStreak}**`,
+        inline: false,
+      },
+    ];
   }
 
   async function handleCheck(interaction) {
@@ -610,27 +606,13 @@ module.exports = function coreCommands(ctx) {
       })
       .join('\n');
 
-    const embed = new EmbedBuilder()
-      .setTitle(`⚔️ Fight History: ${ignDisplay}`)
-      .setColor(0x9c27b0)
-      .setDescription(history || '_No fights on this page._')
-      .addFields(
-        { name: 'Wins (all)', value: String(wins), inline: true },
-        { name: 'Losses (all)', value: String(losses), inline: true },
-        { name: 'Win rate', value: `${winRate}%`, inline: true },
-        { name: 'Total fights', value: String(totalFights), inline: true }
-      )
-      .setFooter({
-        text:
-          `Page ${safePage} of ${totalPages} · ${perPage} per page · Use ◀ ▶ or the optional \`page\` parameter` +
-          (showIds ? ' · IDs for /updatescore' : ''),
-      })
-      .setTimestamp();
-
-    const headUrl = minecraftHeadUrl(ignDisplay);
-    if (headUrl) embed.setThumbnail(headUrl);
-
-    let debugEmbed = null;
+    const baseFields = [
+      { name: 'Wins (all)', value: String(wins), inline: true },
+      { name: 'Losses (all)', value: String(losses), inline: true },
+      { name: 'Win rate', value: `${winRate}%`, inline: true },
+      { name: 'Total fights', value: String(totalFights), inline: true },
+    ];
+    let debugFooterNote = '';
     if (showIds) {
       const debugRows = await pool.query(
         `SELECT winner_ign, loser_ign, final_score, fight_type, created_at
@@ -640,15 +622,30 @@ module.exports = function coreCommands(ctx) {
          LIMIT 3000`,
         [ignLower]
       );
-      debugEmbed = buildFightHistoryDebugEmbed(ignLower, debugRows.rows);
+      baseFields.push(...buildFightHistoryDebugFields(ignLower, debugRows.rows));
       if (debugRows.rows.length >= 3000) {
-        debugEmbed.setFooter({ text: 'Debug stats use first 3000 fights (chronological).' });
+        debugFooterNote = ' · Debug stats use first 3000 fights';
       }
     }
 
+    const embed = new EmbedBuilder()
+      .setTitle(`⚔️ Fight History: ${ignDisplay}`)
+      .setColor(0x9c27b0)
+      .setDescription(history || '_No fights on this page._')
+      .addFields(...baseFields)
+      .setFooter({
+        text:
+          `Page ${safePage} of ${totalPages} · ${perPage} per page · Use ◀ ▶ or the optional \`page\` parameter` +
+          (showIds ? ' · IDs for /updatescore' : '') +
+          debugFooterNote,
+      })
+      .setTimestamp();
+
+    const headUrl = minecraftHeadUrl(ignDisplay);
+    if (headUrl) embed.setThumbnail(headUrl);
+
     return {
       embed,
-      debugEmbed,
       components: fightHistoryComponents(ignLower, safePage, totalPages, showIds),
     };
   }
@@ -670,7 +667,7 @@ module.exports = function coreCommands(ctx) {
       return interaction.editReply({ content: payload.error });
     }
     await interaction.editReply({
-      embeds: payload.debugEmbed ? [payload.embed, payload.debugEmbed] : [payload.embed],
+      embeds: [payload.embed],
       components: payload.components,
     });
   }
@@ -703,7 +700,7 @@ module.exports = function coreCommands(ctx) {
       return interaction.editReply({ content: payload.error, embeds: [], components: [] });
     }
     await interaction.editReply({
-      embeds: payload.debugEmbed ? [payload.embed, payload.debugEmbed] : [payload.embed],
+      embeds: [payload.embed],
       components: payload.components,
     });
     return true;
