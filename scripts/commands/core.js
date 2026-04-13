@@ -220,9 +220,17 @@ module.exports = function coreCommands(ctx) {
     /** Full pass: no hard blocks and no public notes. Applicant role only here. */
     const passedCheck = eligible && issues.length === 0;
 
+    const checkCategoryId =
+      interaction.guild && interaction.channel
+        ? await resolveChannelCategoryId(interaction.channel, interaction.guild)
+        : null;
+    const isAllowedCheckCategory = Boolean(
+      checkCategoryId && CHECK_RENAME_CATEGORY_IDS.includes(checkCategoryId)
+    );
+
     let roleNote = '';
     if (passedCheck) {
-      if (interaction.guild) {
+      if (interaction.guild && isAllowedCheckCategory) {
         try {
           const member = await interaction.guild.members.fetch(discordUser.id);
           const ids = applicantRoleIds();
@@ -276,7 +284,9 @@ module.exports = function coreCommands(ctx) {
           roleNote = `\n\n⚠️ Could not assign applicant role: ${hint}`;
         }
       } else {
-        roleNote = '\n\n⚠️ Run this command in the server to assign the applicant role.';
+        roleNote = interaction.guild
+          ? '\n\n⚠️ Applicant role is only assigned when `/check` is run in an allowed application ticket category.'
+          : '\n\n⚠️ Run this command in the server to assign the applicant role.';
       }
     }
 
@@ -325,7 +335,7 @@ module.exports = function coreCommands(ctx) {
 
     if (passedCheck && interaction.guild && interaction.channel && CHECK_RENAME_CATEGORY_IDS.length > 0) {
       try {
-        const categoryId = await resolveChannelCategoryId(interaction.channel, interaction.guild);
+        const categoryId = checkCategoryId;
         const shouldRename = categoryId && CHECK_RENAME_CATEGORY_IDS.includes(categoryId);
         const prefix = rankTypeToTicketPrefix(rankType);
         if (shouldRename && prefix && typeof interaction.channel.setName === 'function') {
