@@ -111,12 +111,12 @@ async function ensureDatabaseSchema(pool) {
     await client.query(`
       UPDATE tier_results SET type = 'A' WHERE LOWER(TRIM(type)) IN ('a', 'apex')
     `).catch(() => {});
+    /** One live row per player: drop older rows so Prime→Elite moves do not leave stale ladder rows. */
     await client.query(`
       DELETE FROM tier_results a
       WHERE EXISTS (
         SELECT 1 FROM tier_results b
         WHERE LOWER(TRIM(a.ign)) = LOWER(TRIM(b.ign))
-          AND a.type IS NOT DISTINCT FROM b.type
           AND a.id < b.id
       )
     `).catch(() => {});

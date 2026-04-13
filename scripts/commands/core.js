@@ -81,10 +81,11 @@ module.exports = function coreCommands(ctx) {
           ign,
         ]),
         pool.query(
-          `SELECT DISTINCT ON (type) type, tier, created_at
+          `SELECT type, tier, created_at
          FROM tier_results
-         WHERE LOWER(ign) = $1 AND type IN ('P','E','A')
-         ORDER BY type, id DESC`,
+         WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text)) AND type IN ('P','E','A')
+         ORDER BY id DESC
+         LIMIT 1`,
           [ign]
         ),
         fetchNetworkLevelForCheck(hypixelKey, ign),

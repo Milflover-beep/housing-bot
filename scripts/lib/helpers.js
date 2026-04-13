@@ -166,6 +166,21 @@ function tierResultsLadderSqlParam(alias = '') {
 }
 
 /**
+ * One row per normalized IGN (latest by `id`), then filter by ladder $1 (P/E/A).
+ * Stale rows from an old ladder (e.g. Prime after moving to Elite) are ignored for public lists.
+ */
+function sqlTierResultsPublicListRowsForLadder() {
+  return `SELECT t.ign, t.tier
+          FROM (
+            SELECT DISTINCT ON (LOWER(TRIM(ign))) *
+            FROM tier_results
+            ORDER BY LOWER(TRIM(ign)), id DESC
+          ) t
+          WHERE ${tierResultsLadderSqlParam('t')}
+            AND COALESCE(TRIM(t.tier), '') <> ''`;
+}
+
+/**
  * Housing stats assume each side’s points are 0–10. Raw `final_score` can exceed that
  * (overtime e.g. 12–10, typos). Use this when computing averages/margins so stats match league rules.
  */
@@ -201,5 +216,6 @@ module.exports = {
   getSlashSubcommand,
   resolveGuildMember,
   tierResultsLadderSqlParam,
+  sqlTierResultsPublicListRowsForLadder,
   clampSideScoreForStats,
 };

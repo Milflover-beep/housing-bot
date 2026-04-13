@@ -158,10 +158,10 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 
 ### `/viewtier`
 
-- **Description**: View the current tier for an IGN (latest `tier_results` row).
+- **Description**: View **current** placement and **history** for an IGN.
 - **Permission**: PM+ or booster role (see `hasBoosterOrAbove`).
 - **Options**: `ign` (required)
-- **Behavior**: **Ladder name** and **tier** only (no dates).
+- **Behavior**: **Current** is the latest `tier_results` row for that normalized IGN (by `id`). **History** comes from `tier_history` (newest first, capped); the first history line is omitted when it matches the current ladder + tier so the current line is not duplicated. Dates can appear on history lines where stored.
 
 ### `/profile`
 
@@ -184,7 +184,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 
 ### `/tierlist`
 
-- **Description**: Show tier list for one fight type (in the command reply).
+- **Description**: Show tier list for one fight type (in the command reply). Only players whose **latest** `tier_results` row is on that ladder appear (moving someone to another ladder removes them from the old list).
 - **Permission**: Booster+ or PM+.
 - **Options**: `type` — Prime | Elite | Apex
 
@@ -193,7 +193,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Channel**: `TIERLIST_PUBLIC_CHANNEL_ID` or `TIERLIST_CHANNEL_ID` (see **Environment variables**). Default channel id is set in `scripts/lib/tierListChannelSync.js` if unset.
 - **Layout**: **One message** with **three embeds**, top to bottom: **Apex** → **Elite** → **Prime**. Each embed uses bucketed **S / A / B / C / D** sections with `yaml` lists (see `buildTierListEmbedDescription`).
 - **Updates**: On `/submit`, `/primerate`, `/eliterate`, `/apexrate`, and `/removetier`, the bot **deletes** previously tracked message(s) in that channel and **posts a new message** (avoids Discord’s “(edited)” tag). Message id is stored in `tier_list_messages` (`position = 0`).
-- **One row per player**: Before any placement (`/submit`, `/accept`, `/primerate`, `/eliterate`, `/apexrate`), all `tier_results` rows for that normalized IGN are deleted, then the new row is inserted—so a player appears on **one** ladder only until moved again. Public list queries still filter by ladder (`type` = P / E / A). Legacy duplicate rows are removed over time by this rule or by `/removetier`.
+- **Latest placement wins**: Public embeds and `/tierlist` use each player’s **latest** `tier_results` row (by `id`, normalized IGN). They only appear under the ladder of that row—e.g. after Elite placement, they no longer show on Prime. On startup, schema maintenance can delete older `tier_results` rows for the same IGN so the DB matches that model. `/viewtier` shows current + `tier_history` for past ratings.
 
 ### `/publictierlistupdate`
 

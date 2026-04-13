@@ -26,7 +26,7 @@ module.exports = function profileCommands(ctx) {
     const [tierNow, scoreAgg, scoreRecent, scoreRowsAvg, denialRow] = await Promise.all([
       pool.query(
         `SELECT type, tier FROM tier_results
-         WHERE LOWER(ign) = $1 AND COALESCE(TRIM(tier), '') <> ''
+         WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text)) AND COALESCE(TRIM(tier), '') <> ''
          ORDER BY id DESC
          LIMIT 1`,
         [ign]

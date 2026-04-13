@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
-const { tierRank, tierResultsLadderSqlParam, tierListEmbedHeading } = require('./helpers');
+const { tierRank, tierListEmbedHeading, sqlTierResultsPublicListRowsForLadder } = require('./helpers');
 
 /** Tier lists use only `tier_results` (seed from database_export.xlsx `tier_results` sheet + bot ratings). Not pm_list. */
 
@@ -25,13 +25,8 @@ function typeLetterToName(letter) {
   return m[letter] || letter;
 }
 
-/** Latest row per IGN per ladder; ignores empty tier text. */
 function selectCurrentTierRowsSql() {
-  return `SELECT DISTINCT ON (LOWER(tr.ign)) tr.ign, tr.tier
-          FROM tier_results tr
-          WHERE ${tierResultsLadderSqlParam('tr')}
-            AND COALESCE(TRIM(tr.tier), '') <> ''
-          ORDER BY LOWER(tr.ign), tr.id DESC`;
+  return sqlTierResultsPublicListRowsForLadder();
 }
 
 /** Map letter grade to S/A/B/C/D bucket for public list layout. */

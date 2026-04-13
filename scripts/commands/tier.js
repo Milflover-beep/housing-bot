@@ -14,6 +14,7 @@ module.exports = function tierCommands(ctx) {
     defer,
     normalizeIgn,
     tierResultsLadderSqlParam,
+    sqlTierResultsPublicListRowsForLadder,
   } = ctx;
 
   async function submitRating(interaction, fixedType) {
@@ -81,20 +82,52 @@ module.exports = function tierCommands(ctx) {
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const r = await pool.query(
-      `SELECT type, tier, ign FROM tier_results
-       WHERE LOWER(ign) = $1
-       ORDER BY id DESC
-       LIMIT 1`,
+      `SELECT type, tier, ign FROM (
+         SELECT DISTINCT ON (LOWER(TRIM(ign))) *
+         FROM tier_results
+         WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+         ORDER BY LOWER(TRIM(ign)), id DESC
+       ) x`,
       [ign]
     );
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No tier results for **${ign}**.` });
     }
     const row = r.rows[0];
+    const hist = await pool.query(
+      `SELECT type, tier, rated_at, tester FROM tier_history
+       WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+       ORDER BY rated_at DESC NULLS LAST, id DESC
+       LIMIT 18`,
+      [ign]
+    );
+    let histRows = hist.rows;
+    if (
+      histRows.length > 0 &&
+      String(histRows[0].type) === String(row.type) &&
+      String(histRows[0].tier) === String(row.tier)
+    ) {
+      histRows = histRows.slice(1);
+    }
+    let desc =
+      `**Current**\n**${typeLetterToName(row.type)}** — \`${row.tier}\`\n\n` +
+      '**History** (newest first)\n';
+    if (histRows.length === 0) {
+      desc += '_No earlier placements._';
+    } else {
+      desc += histRows
+        .map((h) => {
+          const ts = h.rated_at ? Math.floor(new Date(h.rated_at).getTime() / 1000) : null;
+          const when = ts ? `<t:${ts}:d>` : '—';
+          const who = h.tester ? ` · ${h.tester}` : '';
+          return `• **${typeLetterToName(h.type)}** \`${h.tier}\` — ${when}${who}`;
+        })
+        .join('\n');
+    }
     const embed = new EmbedBuilder()
       .setTitle(`Tier: ${row.ign}`)
       .setColor(0x9b59b6)
-      .setDescription(`**${typeLetterToName(row.type)}** — ${row.tier}`);
+      .setDescription(desc.slice(0, 4096));
     await interaction.editReply({ embeds: [embed] });
   }
 
@@ -151,14 +184,8 @@ module.exports = function tierCommands(ctx) {
     }
     const fightType = interaction.options.getString('type');
     const letter = fightType === 'prime' ? 'P' : fightType === 'elite' ? 'E' : 'A';
-    const res = await pool.query(
-      `SELECT DISTINCT ON (LOWER(tr.ign)) tr.ign, tr.tier, tr.tester, tr.created_at
-       FROM tier_results tr
-       WHERE ${tierResultsLadderSqlParam('tr')}
-         AND COALESCE(TRIM(tr.tier), '') <> ''
-       ORDER BY LOWER(tr.ign), tr.id DESC`,
-      [letter]
-    );
+    const res = await pool.query(`${sqlTierResultsPublicListRowsForLadder()}
+       ORDER BY LOWER(t.ign)`, [letter]);
     const rows = [...res.rows].sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
     const name = typeLetterToName(letter);
     const heading = tierListEmbedHeading(name);
