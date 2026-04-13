@@ -111,6 +111,27 @@ module.exports = function applicationsCommands(ctx) {
     });
   }
 
+  async function handleAbort(interaction) {
+    await defer(interaction, false);
+    const staff = await resolveGuildMember(interaction);
+    if (!requireLevel(staff, 2)) {
+      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    }
+    if (!interaction.guild) {
+      return interaction.editReply({ content: '❌ Use this command in a server.' });
+    }
+    const discordUser = interaction.options.getUser('discord', true);
+
+    try {
+      const member = await interaction.guild.members.fetch(discordUser.id);
+      await removeApplicantRole(interaction.guild, member);
+    } catch (e) {
+      console.warn('abort: applicant role:', e.message);
+    }
+
+    await interaction.editReply({ content: '✅ Application aborted. Application role removed.' });
+  }
+
   async function handleAccept(interaction) {
     await defer(interaction, false);
     const staff = await resolveGuildMember(interaction);
@@ -224,6 +245,10 @@ module.exports = function applicationsCommands(ctx) {
             )
         ),
       new SlashCommandBuilder()
+        .setName('abort')
+        .setDescription('Abort an application: remove applicant role (no cooldown)')
+        .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
+      new SlashCommandBuilder()
         .setName('accept')
         .setDescription(
           'Accept applicant: place tier, sync tier list, remove applicant role, notify managers'
@@ -249,6 +274,11 @@ module.exports = function applicationsCommands(ctx) {
             .addChoices(...VALID_TIERS.map((t) => ({ name: t, value: t })))
         ),
     ],
-    handlers: { clearcooldown: handleClearcooldown, deny: handleDeny, accept: handleAccept },
+    handlers: {
+      clearcooldown: handleClearcooldown,
+      deny: handleDeny,
+      abort: handleAbort,
+      accept: handleAccept,
+    },
   };
 };

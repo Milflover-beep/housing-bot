@@ -65,6 +65,14 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `type` (choice, required) — `Prime (1 week)` | `Elite (2 weeks)` | `Apex (3 weeks)` — sets cooldown length.
 - **Behavior**: Upserts `application_denials` for `(discord_id, rank_type)`. Removes role named `BOT_ROLE_APPLICANT_NAME`. Must be used **in a server** (needs guild + member).
 
+### `/abort`
+
+- **Description**: Abort an application without cooldown: removes applicant role if present.
+- **Default permission**: Manage Roles (**Staff+**).
+- **Options**:
+  - `discord` (user, required)
+- **Behavior**: Does not write to `application_denials` and does not require a rank type. Must be used **in a server** (needs guild + member).
+
 ### `/accept`
 
 - **Description**: Accept a tryout applicant: writes **tier** to `tier_results` / `tier_history` (same logic as **`/submit`** for that ladder), runs **`syncTierListChannel`**, clears `application_denials` for that Discord user, removes the applicant role, and (when configured) posts a **Rank Request** embed to **`ACCEPT_NOTIFY_CHANNEL_ID`** with **`ACCEPT_PING_ROLE_ID`** / **`RANK_REQUEST_PING_ROLE_ID`**.
