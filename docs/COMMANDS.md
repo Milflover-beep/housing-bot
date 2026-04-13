@@ -197,9 +197,9 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 
 ### `/publictierlistupdate`
 
-- **Description**: Owner-only manual refresh of the public tier list message(s) in the configured channel (same delete + repost flow as above).
-- **Permission**: **Owner** only.
-- **Options**: `channel-id` (optional) — overrides env default for that run.
+- **Description**: **Repost** the public tier list (same delete + repost flow as automatic updates) using **`TIERLIST_PUBLIC_CHANNEL_ID`** or **`TIERLIST_CHANNEL_ID`** only — **no command options**.
+- **Default permission**: None at the Discord level — the bot requires **Manager+** (level 3).
+- **Options**: None.
 
 ---
 

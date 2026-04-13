@@ -639,6 +639,7 @@ module.exports = function coreCommands(ctx) {
         '`/addpm`',
         '`/editpm`',
         '`/voidscore`',
+        '`/publictierlistupdate`',
       ]);
     }
     if (lv >= 4) {
@@ -658,7 +659,6 @@ module.exports = function coreCommands(ctx) {
         '`/find`',
         '`/errorcheck`',
         '`/removeflag`',
-        '`/publictierlistupdate`',
         '`/gradientrequests` (basic)',
       ]);
     }

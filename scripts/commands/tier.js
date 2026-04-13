@@ -7,7 +7,6 @@ module.exports = function tierCommands(ctx) {
     requireLevel,
     getMemberLevel,
     hasBoosterOrAbove,
-    isOwner,
     VALID_TIERS,
     tierRank,
     typeLetterToName,
@@ -186,15 +185,14 @@ module.exports = function tierCommands(ctx) {
 
   async function handlePublictierlistupdate(interaction) {
     await defer(interaction, false);
-    if (!isOwner(interaction.user.id)) {
-      return interaction.editReply({ content: '❌ Bot owner only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const channelId =
-      interaction.options.getString('channel-id')?.trim() || getTierListChannelId();
+    const channelId = getTierListChannelId();
     if (!channelId) {
       return interaction.editReply({
         content:
-          '❌ Set `TIERLIST_PUBLIC_CHANNEL_ID` / `TIERLIST_CHANNEL_ID` in .env or pass `channel-id`.',
+          '❌ Set **TIERLIST_PUBLIC_CHANNEL_ID** or **TIERLIST_CHANNEL_ID** in the bot environment.',
       });
     }
     const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
@@ -258,10 +256,7 @@ module.exports = function tierCommands(ctx) {
       ),
     new SlashCommandBuilder()
       .setName('publictierlistupdate')
-      .setDescription('Post the public tier list leaderboard (Bot owners only)')
-      .addStringOption((o) =>
-        o.setName('channel-id').setDescription('Channel ID (optional if TIERLIST_CHANNEL_ID set)')
-      ),
+      .setDescription('Repost public tier list (Apex/Elite/Prime) to configured channel (Manager+)'),
   ];
 
   return {
