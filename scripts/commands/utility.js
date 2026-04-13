@@ -90,6 +90,24 @@ module.exports = function utilityCommands(ctx) {
     });
   }
 
+  async function handleWhois(interaction) {
+    await defer(interaction, false);
+    const raw = interaction.options.getString('ign', true).trim();
+    if (!raw) {
+      return interaction.editReply({ content: 'Give an IGN to whois.' });
+    }
+    const key = raw.toLowerCase();
+    let text;
+    if (key === 'vverse') {
+      text = 'VVERSE is the best pvper.\nHe Who PVPs..';
+    } else if (key === 'ecuadors') {
+      text = 'Ecuadors is the one who knocks and coded this bot';
+    } else {
+      text = `${raw} is mid`;
+    }
+    await interaction.editReply({ content: text });
+  }
+
   async function handleRemoveflag(interaction) {
     await defer(interaction, true);
     if (!isOwner(interaction.user.id)) {
@@ -107,6 +125,12 @@ module.exports = function utilityCommands(ctx) {
   }
 
   const commands = [
+    new SlashCommandBuilder()
+      .setName('whois')
+      .setDescription('PvP facts about an IGN')
+      .addStringOption((o) =>
+        o.setName('ign').setDescription('Minecraft IGN').setRequired(true)
+      ),
     new SlashCommandBuilder()
       .setName('update')
       .setDescription('Update IGN across all database tables')
@@ -133,6 +157,7 @@ module.exports = function utilityCommands(ctx) {
   return {
     commands,
     handlers: {
+      whois: handleWhois,
       update: handleUpdate,
       find: handleFind,
       errorcheck: handleErrorcheck,
