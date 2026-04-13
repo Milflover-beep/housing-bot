@@ -35,11 +35,12 @@ module.exports = function tierCommands(ctx) {
     }
 
     const existing = await pool.query(
-      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 AND type = $2 ORDER BY created_at DESC LIMIT 1',
-      [ign, type]
+      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 1',
+      [ign]
     );
 
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [ign, type]);
+    /** One active row per IGN: clear any ladder before inserting the new placement. */
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1', [ign]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,
@@ -64,7 +65,11 @@ module.exports = function tierCommands(ctx) {
       .setTimestamp();
 
     if (existing.rows.length > 0) {
-      embed.addFields({ name: 'Note', value: `Previously ${existing.rows[0].tier}` });
+      const ex = existing.rows[0];
+      embed.addFields({
+        name: 'Note',
+        value: `Replaced **${typeLetterToName(ex.type)}** \`${ex.tier}\`.`,
+      });
     }
     await interaction.editReply({ embeds: [embed] });
     await syncTierListChannel(interaction.client, pool);
@@ -77,21 +82,20 @@ module.exports = function tierCommands(ctx) {
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const r = await pool.query(
-      `SELECT DISTINCT ON (type) type, tier, ign
-       FROM tier_results
+      `SELECT type, tier, ign FROM tier_results
        WHERE LOWER(ign) = $1
-       ORDER BY type, id DESC`,
+       ORDER BY id DESC
+       LIMIT 1`,
       [ign]
     );
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No tier results for **${ign}**.` });
     }
+    const row = r.rows[0];
     const embed = new EmbedBuilder()
-      .setTitle(`Tier: ${r.rows[0].ign}`)
+      .setTitle(`Tier: ${row.ign}`)
       .setColor(0x9b59b6)
-      .setDescription(
-        r.rows.map((row) => `**${typeLetterToName(row.type)}** — ${row.tier}`).join('\n')
-      );
+      .setDescription(`**${typeLetterToName(row.type)}** — ${row.tier}`);
     await interaction.editReply({ embeds: [embed] });
   }
 
@@ -101,20 +105,17 @@ module.exports = function tierCommands(ctx) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
-    const typeOpt = interaction.options.getString('type');
-    const letter = typeOpt === 'prime' ? 'P' : typeOpt === 'elite' ? 'E' : 'A';
     const q = await pool.query(
-      'DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2 RETURNING *',
-      [ign, letter]
+      'DELETE FROM tier_results WHERE LOWER(ign) = $1 RETURNING type, tier, ign',
+      [ign]
     );
-    if (q.rows.length === 0) {
-      return interaction.editReply({
-        content: `❌ No **${typeOpt}** tier entry for **${ign}**.`,
-      });
+    if (q.rowCount === 0) {
+      return interaction.editReply({ content: `❌ No tier entry for **${ign}**.` });
     }
-    const r = q.rows[0];
+    const parts = q.rows.map((r) => `**${typeLetterToName(r.type)}** ${r.tier}`);
+    const list = parts.length <= 5 ? parts.join(', ') : `${parts.slice(0, 5).join(', ')} … (+${parts.length - 5} more)`;
     await interaction.editReply({
-      content: `✅ Removed **${typeLetterToName(r.type)}** tier **${r.tier}** for **${r.ign}**.`,
+      content: `✅ Removed **${q.rowCount}** tier row(s) for **${q.rows[0].ign}**: ${list}`,
     });
     await syncTierListChannel(interaction.client, pool);
   }
@@ -235,19 +236,8 @@ module.exports = function tierCommands(ctx) {
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('removetier')
-      .setDescription('Remove a player tier entry by IGN and rank type (Manager+ only)')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .addStringOption((o) =>
-        o
-          .setName('type')
-          .setDescription('Which rank ladder to clear')
-          .setRequired(true)
-          .addChoices(
-            { name: 'Prime', value: 'prime' },
-            { name: 'Elite', value: 'elite' },
-            { name: 'Apex', value: 'apex' }
-          )
-      ),
+      .setDescription('Remove all tier_results rows for an IGN (Manager+ only)')
+      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('tierids')
       .setDescription('View all database IDs for a player tier entries (Manager+ only)')

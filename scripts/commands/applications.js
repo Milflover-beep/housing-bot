@@ -134,7 +134,7 @@ module.exports = function applicationsCommands(ctx) {
     const typeLetter = RANK_LETTER[typeStr];
     const tester = interaction.user.username;
 
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [ign, typeLetter]);
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1', [ign]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,

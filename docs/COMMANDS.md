@@ -74,7 +74,7 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `type` (choice, required) — Prime | Elite | Apex (maps to ladder **P** / **E** / **A** in the DB)
   - `tier` (choice, required) — same tier labels as **`/submit`** (`S`, `A+`, … `N/A`)
   - `win-fraction` (optional) — e.g. `14/20`, shown in the notify embed when set
-- **Behavior**: Must be used **in a server**. Tier placement happens **before** applicant role removal so a bad tier value fails early.
+- **Behavior**: Must be used **in a server**. Clears **all** `tier_results` for that `ign`, then inserts one row (same one-row-per-player rule as **`/submit`**). Tier placement happens **before** applicant role removal so a bad tier value fails early.
 
 ### `/clearcooldown`
 
@@ -143,7 +143,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
   - `ign` (string, required)
   - `tier` (string, required) — must match `VALID_TIERS`.
   - `discord` (user, required)
-- **Behavior**: Deletes any existing `tier_results` row for the same `ign` + ladder, then inserts the new row; appends `tier_history`. Refreshes the **public tier list** message (see below).
+- **Behavior**: Deletes **all** existing `tier_results` rows for that `ign` (one active placement per player), then inserts the new row for the chosen ladder; appends `tier_history`. Refreshes the **public tier list** message (see below).
 
 ### `/submit`
 
@@ -154,14 +154,14 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
   - `type` (choice) — Prime (`P`) | Elite (`E`) | Apex (`A`)
   - `tier` (choice, required) — **dropdown** of all `VALID_TIERS` (not free text).
   - `discord` (user, required)
-- **Behavior**: Same replace‑then‑insert as above; refreshes public tier list.
+- **Behavior**: Same as rate commands: clears any prior `tier_results` for that `ign`, then inserts one row; refreshes public tier list.
 
 ### `/viewtier`
 
-- **Description**: View current tier rows for an IGN (one row per ladder when duplicates were cleaned up).
+- **Description**: View the current tier for an IGN (latest `tier_results` row).
 - **Permission**: PM+ or booster role (see `hasBoosterOrAbove`).
 - **Options**: `ign` (required)
-- **Behavior**: One line per ladder: **ladder name** and **tier** only (no dates).
+- **Behavior**: **Ladder name** and **tier** only (no dates).
 
 ### `/profile`
 
@@ -171,12 +171,10 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 
 ### `/removetier`
 
-- **Description**: Remove the current tier entry for one ladder for that IGN.
+- **Description**: Remove **all** `tier_results` rows for that IGN (clears their only placement).
 - **Default permission**: Manage Roles (**Manager+**).
-- **Options**:
-  - `ign` (string, required)
-  - `type` (choice, required) — Prime | Elite | Apex
-- **Behavior**: `DELETE FROM tier_results` for that `ign` + P/E/A. Refreshes public tier list.
+- **Options**: `ign` (string, required)
+- **Behavior**: `DELETE FROM tier_results` where `LOWER(ign)` matches. Refreshes public tier list. If legacy data had multiple rows, the reply lists what was removed (capped).
 
 ### `/tierids`
 
@@ -195,7 +193,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Channel**: `TIERLIST_PUBLIC_CHANNEL_ID` or `TIERLIST_CHANNEL_ID` (see **Environment variables**). Default channel id is set in `scripts/lib/tierListChannelSync.js` if unset.
 - **Layout**: **One message** with **three embeds**, top to bottom: **Apex** → **Elite** → **Prime**. Each embed uses bucketed **S / A / B / C / D** sections with `yaml` lists (see `buildTierListEmbedDescription`).
 - **Updates**: On `/submit`, `/primerate`, `/eliterate`, `/apexrate`, and `/removetier`, the bot **deletes** previously tracked message(s) in that channel and **posts a new message** (avoids Discord’s “(edited)” tag). Message id is stored in `tier_list_messages` (`position = 0`).
-- **Deduping**: Before insert, old `tier_results` row for the same normalized IGN + ladder is removed so each player appears once per ladder. Reads use `DISTINCT ON` where needed for legacy duplicate rows.
+- **One row per player**: Before any placement (`/submit`, `/accept`, `/primerate`, `/eliterate`, `/apexrate`), all `tier_results` rows for that normalized IGN are deleted, then the new row is inserted—so a player appears on **one** ladder only until moved again. Public list queries still filter by ladder (`type` = P / E / A). Legacy duplicate rows are removed over time by this rule or by `/removetier`.
 
 ### `/publictierlistupdate`
 

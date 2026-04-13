@@ -530,11 +530,11 @@ module.exports = function coreCommands(ctx) {
     }
 
     const existing = await pool.query(
-      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 AND type = $2 ORDER BY created_at DESC LIMIT 1',
-      [ign, type]
+      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 1',
+      [ign]
     );
 
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [ign, type]);
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1', [ign]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,
@@ -564,9 +564,11 @@ module.exports = function coreCommands(ctx) {
       .setTimestamp();
 
     if (existing.rows.length > 0) {
+      const ex = existing.rows[0];
+      const prevLadder = { P: 'Prime', E: 'Elite', A: 'Apex' }[ex.type] || String(ex.type || '?');
       embed.addFields({
         name: '📝 Note',
-        value: `Previously rated ${typeName} ${existing.rows[0].tier}`,
+        value: `Replaced **${prevLadder}** \`${ex.tier}\`.`,
       });
     }
 
