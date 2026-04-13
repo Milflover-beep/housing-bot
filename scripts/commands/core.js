@@ -156,7 +156,6 @@ module.exports = function coreCommands(ctx) {
     return new EmbedBuilder()
       .setTitle(`Fight history (debug): ${ignLower}`)
       .setColor(0x7b1fa2)
-      .setDescription('Staff-only debug stats from all non-voided fights.')
       .addFields(
         {
           name: 'Overview',
@@ -662,7 +661,7 @@ module.exports = function coreCommands(ctx) {
     const wantsDebug = interaction.options.getBoolean('debug') === true;
     if (wantsDebug && !requireLevel(interaction.member, 2)) {
       return interaction.editReply({
-        content: '❌ Only staff can use **debug** (shows database fight IDs for `/updatescore`).',
+        content: '❌ You do not have permission to use **debug**.',
       });
     }
     const showIds = wantsDebug && requireLevel(interaction.member, 2);
@@ -691,7 +690,7 @@ module.exports = function coreCommands(ctx) {
     const debugFromButton = parts.length === 4 && parts[3] === '1';
     if (debugFromButton && !requireLevel(interaction.member, 2)) {
       await interaction.reply({
-        content: '❌ Only staff can use debug fight history.',
+        content: '❌ You do not have permission to use debug fight history.',
         ephemeral: true,
       });
       return true;
