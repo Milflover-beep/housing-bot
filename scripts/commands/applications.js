@@ -231,7 +231,7 @@ module.exports = function applicationsCommands(ctx) {
       new SlashCommandBuilder()
         .setName('accept')
         .setDescription(
-          'Accept an applicant: place tier (same as /submit), sync tier list, remove applicant role, notify managers'
+          'Accept applicant: place tier, sync tier list, remove applicant role, notify managers'
         )
         .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
         .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
