@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { syncTierListChannel } = require('../lib/tierListChannelSync');
 
 const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
@@ -14,6 +15,7 @@ module.exports = function applicationsCommands(ctx) {
     applicantRoleIds,
     parseRoleIdList,
     resolveGuildMember,
+    VALID_TIERS,
   } = ctx;
 
   /** Remove configured applicant role(s) from a guild member (same logic as /deny). */
@@ -121,7 +123,29 @@ module.exports = function applicationsCommands(ctx) {
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
+    const tier = interaction.options.getString('tier');
     const winFraction = interaction.options.getString('win-fraction');
+
+    if (!VALID_TIERS.includes(tier)) {
+      return interaction.editReply({
+        content: `❌ Invalid tier \`${tier}\`. Valid tiers: ${VALID_TIERS.join(', ')}`,
+      });
+    }
+    const typeLetter = RANK_LETTER[typeStr];
+    const tester = interaction.user.username;
+
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1 AND type = $2', [ign, typeLetter]);
+    await pool.query(
+      `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
+       VALUES ($1, $2, $3, $4, NOW(), $5)`,
+      [ign, typeLetter, tier, discordUser.id, tester]
+    );
+    await pool.query(
+      `INSERT INTO tier_history (ign, type, tier, discord_id, rated_at, tester)
+       VALUES ($1, $2, $3, $4, NOW(), $5)`,
+      [ign, typeLetter, tier, discordUser.id, tester]
+    );
+    await syncTierListChannel(interaction.client, pool);
 
     try {
       const member = await interaction.guild.members.fetch(discordUser.id);
@@ -154,7 +178,8 @@ module.exports = function applicationsCommands(ctx) {
             .addFields(
               { name: 'Player IGN', value: ign, inline: true },
               { name: 'Discord User', value: `<@${discordUser.id}>`, inline: true },
-              { name: 'Rank Type', value: typeStr, inline: true }
+              { name: 'Rank Type', value: typeStr, inline: true },
+              { name: 'Tier', value: tier, inline: true }
             )
             .setTimestamp();
           if (winFraction && String(winFraction).trim()) {
@@ -173,7 +198,9 @@ module.exports = function applicationsCommands(ctx) {
     }
 
     await interaction.editReply({
-      content: `✅ Accepted **${ign}** (<@${discordUser.id}>) for **${typeStr}** tryout. Applicant role removed.${note}`,
+      content:
+        `✅ Accepted **${ign}** (<@${discordUser.id}>) for **${typeStr}** (**${tier}**). ` +
+        `Recorded in **tier_results** / **tier_history** and tier list channel synced. Applicant role removed.${note}`,
     });
   }
 
@@ -203,7 +230,9 @@ module.exports = function applicationsCommands(ctx) {
         ),
       new SlashCommandBuilder()
         .setName('accept')
-        .setDescription('Accept an applicant: remove applicant role and notify managers')
+        .setDescription(
+          'Accept an applicant: place tier (same as /submit), sync tier list, remove applicant role, notify managers'
+        )
         .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
         .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true))
         .addStringOption((o) =>
@@ -216,6 +245,13 @@ module.exports = function applicationsCommands(ctx) {
               { name: 'Elite', value: 'elite' },
               { name: 'Apex', value: 'apex' }
             )
+        )
+        .addStringOption((o) =>
+          o
+            .setName('tier')
+            .setDescription('Tier placement (same labels as /submit)')
+            .setRequired(true)
+            .addChoices(...VALID_TIERS.map((t) => ({ name: t, value: t })))
         )
         .addStringOption((o) =>
           o.setName('win-fraction').setDescription('Optional, e.g. 14/20').setRequired(false)

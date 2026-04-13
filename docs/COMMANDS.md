@@ -65,6 +65,17 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `type` (choice, required) — `Prime (1 week)` | `Elite (2 weeks)` | `Apex (3 weeks)` — sets cooldown length.
 - **Behavior**: Upserts `application_denials` for `(discord_id, rank_type)`. Removes role named `BOT_ROLE_APPLICANT_NAME`. Must be used **in a server** (needs guild + member).
 
+### `/accept`
+
+- **Description**: Accept a tryout applicant: writes **tier** to `tier_results` / `tier_history` (same logic as **`/submit`** for that ladder), runs **`syncTierListChannel`**, clears `application_denials` for that Discord user, removes the applicant role, and (when configured) posts a **Rank Request** embed to **`ACCEPT_NOTIFY_CHANNEL_ID`** with **`ACCEPT_PING_ROLE_ID`** / **`RANK_REQUEST_PING_ROLE_ID`**.
+- **Default permission**: None at the Discord level — the bot requires **Staff+** (level 2).
+- **Options**:
+  - `ign`, `discord` (required)
+  - `type` (choice, required) — Prime | Elite | Apex (maps to ladder **P** / **E** / **A** in the DB)
+  - `tier` (choice, required) — same tier labels as **`/submit`** (`S`, `A+`, … `N/A`)
+  - `win-fraction` (optional) — e.g. `14/20`, shown in the notify embed when set
+- **Behavior**: Must be used **in a server**. Tier placement happens **before** applicant role removal so a bad tier value fails early.
+
 ### `/clearcooldown`
 
 - **Description**: Deletes the active `application_denials` row for a Discord user (clears tryout cooldown after a mistaken `/deny`).
