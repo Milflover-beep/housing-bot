@@ -73,7 +73,6 @@ Commands below say **Staff+** meaning `requireLevel(2)`, **Manager+** = 3, **Adm
   - `ign`, `discord` (required)
   - `type` (choice, required) — Prime | Elite | Apex (maps to ladder **P** / **E** / **A** in the DB)
   - `tier` (choice, required) — same tier labels as **`/submit`** (`S`, `A+`, … `N/A`)
-  - `win-fraction` (optional) — e.g. `14/20`, shown in the notify embed when set
 - **Behavior**: Must be used **in a server**. Clears **all** `tier_results` for that `ign`, then inserts one row (same one-row-per-player rule as **`/submit`**). Tier placement happens **before** applicant role removal so a bad tier value fails early.
 
 ### `/clearcooldown`

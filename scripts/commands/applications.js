@@ -124,7 +124,6 @@ module.exports = function applicationsCommands(ctx) {
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
     const tier = interaction.options.getString('tier');
-    const winFraction = interaction.options.getString('win-fraction');
 
     if (!VALID_TIERS.includes(tier)) {
       return interaction.editReply({
@@ -163,14 +162,13 @@ module.exports = function applicationsCommands(ctx) {
     const notifyChannelId = parseRoleIdList('ACCEPT_NOTIFY_CHANNEL_ID')[0];
     const pingRoleId = acceptPingRoleId();
     const rankLabel = RANK_LABEL[typeStr] || typeStr;
-    const winPart = winFraction && String(winFraction).trim() ? ` ${String(winFraction).trim()}` : '';
 
     if (notifyChannelId && pingRoleId) {
       try {
         const channel = await interaction.client.channels.fetch(notifyChannelId);
         if (channel?.isTextBased?.()) {
           const pingMention = `<@&${pingRoleId}>`;
-          const bodyLine = `**${ign}** <@${discordUser.id}> needs **${rankLabel}**!${winPart}`;
+          const bodyLine = `**${ign}** <@${discordUser.id}> needs **${rankLabel}**!`;
           const embed = new EmbedBuilder()
             .setTitle('Rank Request')
             .setDescription(`${bodyLine} ${pingMention}`)
@@ -182,9 +180,6 @@ module.exports = function applicationsCommands(ctx) {
               { name: 'Tier', value: tier, inline: true }
             )
             .setTimestamp();
-          if (winFraction && String(winFraction).trim()) {
-            embed.addFields({ name: 'Win fraction', value: String(winFraction).trim(), inline: true });
-          }
           await channel.send({ content: pingMention, embeds: [embed] });
         }
       } catch (e) {
@@ -252,9 +247,6 @@ module.exports = function applicationsCommands(ctx) {
             .setDescription('Tier placement (same labels as /submit)')
             .setRequired(true)
             .addChoices(...VALID_TIERS.map((t) => ({ name: t, value: t })))
-        )
-        .addStringOption((o) =>
-          o.setName('win-fraction').setDescription('Optional, e.g. 14/20').setRequired(false)
         ),
     ],
     handlers: { clearcooldown: handleClearcooldown, deny: handleDeny, accept: handleAccept },
