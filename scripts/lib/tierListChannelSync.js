@@ -50,7 +50,7 @@ const BUCKET_EMOJI = {
   D: '⬛',
 };
 
-/** Markdown: S/A/B/C/D buckets, yaml lists — no extra prose (ladder name is embed title). */
+/** Markdown: S/A/B/C/D buckets in plain code fences (ladder name is embed title). */
 function buildTierListEmbedDescription(rows) {
   const buckets = { S: [], A: [], B: [], C: [], D: [] };
   for (const r of rows) {
@@ -73,7 +73,7 @@ function buildTierListEmbedDescription(rows) {
     if (!list.length) continue;
     hasAny = true;
     lines.push(`${BUCKET_EMOJI[b]} **${b}** (${list.length})`);
-    lines.push('```yaml');
+    lines.push('```');
     lines.push(...list.map((r) => `- ${r.ign}`));
     lines.push('```');
     lines.push('');

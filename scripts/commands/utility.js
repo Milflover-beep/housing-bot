@@ -100,6 +100,12 @@ module.exports = function utilityCommands(ctx) {
     let text;
     if (key === 'vverse') {
       text = 'VVERSE is the best pvper.\nHe Who PVPs..';
+    } else if (key === 'sniper_man') {
+      text = 'sniper_man is the smp king';
+    } else if (key === 'rosyuv') {
+      text = 'rosyuv is the viltrumite emperor';
+    } else if (key === 'justiceforblacks') {
+      text = 'JusticeForBlacks is most certainly not mid';
     } else if (key === 'ecuadors') {
       text = 'Ecuadors is the one who knocks and coded this bot';
     } else {
