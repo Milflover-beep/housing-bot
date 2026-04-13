@@ -28,7 +28,7 @@ module.exports = function altsCommands(ctx) {
       [ign]
     );
     if (r.rows.length === 0) {
-      return interaction.editReply({ content: `No alt rows for **${ign}**.` });
+      return interaction.editReply({ content: `No alts found for **${ign}**.` });
     }
     const lines = r.rows.map(
       (row) =>

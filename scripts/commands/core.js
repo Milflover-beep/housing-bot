@@ -25,6 +25,36 @@ module.exports = function coreCommands(ctx) {
     resolveGuildMember,
   } = ctx;
 
+  const CHECK_RENAME_CATEGORY_IDS = String(process.env.CHECK_RENAME_CATEGORY_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  function rankTypeToTicketPrefix(rankType) {
+    const key = String(rankType || '').toLowerCase();
+    if (key === 'prime') return 'prime';
+    if (key === 'elite') return 'elite';
+    if (key === 'apex') return 'apex';
+    if (key === 'pm') return 'pm';
+    return null;
+  }
+
+  async function resolveChannelCategoryId(channel, guild) {
+    if (!channel || !guild) return null;
+    // Guild text/voice/forum channels typically have category in parentId.
+    if (channel.parentId && guild.channels.cache.get(channel.parentId)?.type === 4) {
+      return channel.parentId;
+    }
+    // Threads have parentId = parent channel id; resolve its category.
+    if (channel.parentId) {
+      const parent =
+        guild.channels.cache.get(channel.parentId) ||
+        (await guild.channels.fetch(channel.parentId).catch(() => null));
+      if (parent?.parentId) return parent.parentId;
+    }
+    return null;
+  }
+
   function isBlacklisted(rows) {
     return rows.some((row) => {
       if (!row.blacklist_expires) return true;
@@ -119,7 +149,7 @@ module.exports = function coreCommands(ctx) {
           hypixelResult.message.length > 500
             ? `${hypixelResult.message.slice(0, 497)}…`
             : hypixelResult.message;
-        hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Use **\`/hypixel\`** to check manually before tryout.`;
+        hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Use **\`/hypixel\`** to check manually before applying.`;
       } else if (hypixelResult.level < 30) {
         eligible = false;
         if (!hypixelResult.hasPlayer) {
@@ -172,7 +202,7 @@ module.exports = function coreCommands(ctx) {
     if (!isPmCheck && applyLadderLetter === 'A' && !latestByLadder['E'] && !latestByLadder['A']) {
       eligible = false;
       issues.push(
-        '🔼 **Apex tryout** — need **Elite** or **Apex** tier on file. **Prime** or **no tier** cannot apply for Apex (use Prime or Elite first).'
+        '🔼 **Apex application** — need **Elite** or **Apex** tier on file. **Prime** or **no tier** cannot apply for Apex (use Prime or Elite first).'
       );
     }
 
@@ -251,7 +281,7 @@ module.exports = function coreCommands(ctx) {
     }
 
     if (passedCheck) {
-      const ok = `✅ **${ign} is eligible** for ${rankLabel} tryout.\nNo issues found.${roleNote}`;
+      const ok = `✅ **${ign} is eligible** to apply for ${rankLabel}.\nNo issues found.${roleNote}`;
       if (roleNote) {
         embed.setColor(0xffa000);
         embed.setDescription(ok);
@@ -261,7 +291,9 @@ module.exports = function coreCommands(ctx) {
       }
     } else if (!eligible) {
       embed.setColor(0xff1744);
-      embed.setDescription(`❌ **${ign} is NOT eligible** for ${rankLabel} tryout.\n\n${issues.join('\n\n')}`);
+      embed.setDescription(
+        `❌ **${ign} is NOT eligible** to apply for ${rankLabel}.\n\n${issues.join('\n\n')}`
+      );
     } else {
       embed.setColor(0xffa000);
       embed.setDescription(`⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}`);
@@ -290,6 +322,22 @@ module.exports = function coreCommands(ctx) {
     if (headUrl) embed.setThumbnail(headUrl);
 
     await interaction.editReply({ embeds: [embed] });
+
+    if (passedCheck && interaction.guild && interaction.channel && CHECK_RENAME_CATEGORY_IDS.length > 0) {
+      try {
+        const categoryId = await resolveChannelCategoryId(interaction.channel, interaction.guild);
+        const shouldRename = categoryId && CHECK_RENAME_CATEGORY_IDS.includes(categoryId);
+        const prefix = rankTypeToTicketPrefix(rankType);
+        if (shouldRename && prefix && typeof interaction.channel.setName === 'function') {
+          const nextName = `${prefix}-${ign}`.slice(0, 100);
+          if (interaction.channel.name !== nextName) {
+            await interaction.channel.setName(nextName, 'Passed /check application eligibility');
+          }
+        }
+      } catch (e) {
+        console.warn('check: ticket rename failed:', e?.message || e);
+      }
+    }
 
     if (altStaffMessage) {
       let content = altStaffMessage;
