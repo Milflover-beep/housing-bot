@@ -100,6 +100,8 @@ module.exports = function utilityCommands(ctx) {
     let text;
     if (key === 'vverse') {
       text = 'VVERSE is the best pvper.\nHe Who PVPs..';
+    } else if (key === 'lukewarmsoup') {
+      text = 'lukewarmsoup is the best admin';
     } else if (key === 'sniper_man') {
       text = 'sniper_man is the smp king';
     } else if (key === 'rosyuv') {

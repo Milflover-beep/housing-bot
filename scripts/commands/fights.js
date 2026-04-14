@@ -1,8 +1,25 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 
 module.exports = function fightsCommands(ctx) {
   const { pool, isAdminOrOwner, requireLevel, defer, normalizeIgn } = ctx;
+
+  async function sendFightActionLog(client, action, row, actorUsername) {
+    const title = action === 'voided' ? 'Fight Voided' : 'Fight Deleted';
+    const color = action === 'voided' ? 0xe67e22 : 0xe74c3c;
+    const embed = new EmbedBuilder()
+      .setTitle(title)
+      .setColor(color)
+      .addFields(
+        { name: 'Fight ID', value: String(row.id ?? '—'), inline: true },
+        { name: 'Winner', value: String(row.winner_ign || '—'), inline: true },
+        { name: 'Loser', value: String(row.loser_ign || '—'), inline: true },
+        { name: 'Action', value: action === 'voided' ? 'fight voided' : 'fight deleted', inline: true },
+        { name: 'By', value: String(actorUsername || '—'), inline: true }
+      )
+      .setTimestamp();
+    await sendFightScoreLogEmbed(client, embed);
+  }
 
   async function handleUpdatescore(interaction) {
     await defer(interaction, false);
@@ -13,6 +30,8 @@ module.exports = function fightsCommands(ctx) {
     const winner = interaction.options.getString('winner-ign');
     const loser = interaction.options.getString('loser-ign');
     const score = interaction.options.getString('final-score');
+    const fightType = interaction.options.getString('fight-type');
+    const voided = interaction.options.getBoolean('voided');
     const sets = [];
     const vals = [];
     let n = 1;
@@ -27,6 +46,14 @@ module.exports = function fightsCommands(ctx) {
     if (score) {
       sets.push(`final_score = $${n++}`);
       vals.push(score);
+    }
+    if (fightType) {
+      sets.push(`fight_type = $${n++}`);
+      vals.push(fightType);
+    }
+    if (voided !== null) {
+      sets.push(`is_voided = $${n++}`);
+      vals.push(voided);
     }
     if (!sets.length) {
       return interaction.editReply({ content: '❌ Provide at least one field to update.' });
@@ -59,6 +86,7 @@ module.exports = function fightsCommands(ctx) {
       return interaction.editReply({ content: '❌ No score with that id.' });
     }
     await interaction.editReply({ content: `✅ Voided score **#${id}**.` });
+    await sendFightActionLog(interaction.client, 'voided', q.rows[0], interaction.user.username);
   }
 
   async function handleDeletescore(interaction) {
@@ -67,7 +95,10 @@ module.exports = function fightsCommands(ctx) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
     const id = interaction.options.getInteger('id');
-    const q = await pool.query('DELETE FROM scores WHERE id = $1 RETURNING id, winner_ign, loser_ign', [id]);
+    const q = await pool.query(
+      'DELETE FROM scores WHERE id = $1 RETURNING id, winner_ign, loser_ign',
+      [id]
+    );
     if (!q.rows.length) {
       return interaction.editReply({ content: '❌ No score with that id.' });
     }
@@ -75,6 +106,7 @@ module.exports = function fightsCommands(ctx) {
     await interaction.editReply({
       content: `✅ Permanently deleted fight **#${id}** (\`${r.winner_ign}\` vs \`${r.loser_ign}\`).`,
     });
+    await sendFightActionLog(interaction.client, 'deleted', r, interaction.user.username);
   }
 
   const commands = [
@@ -95,6 +127,24 @@ module.exports = function fightsCommands(ctx) {
       )
       .addStringOption((o) =>
         o.setName('final-score').setDescription('New score (optional)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o
+          .setName('fight-type')
+          .setDescription('New fight type (optional)')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Prime', value: 'prime' },
+            { name: 'Elite', value: 'elite' },
+            { name: 'Apex', value: 'apex' },
+            { name: 'PM', value: 'pm' }
+          )
+      )
+      .addBooleanOption((o) =>
+        o
+          .setName('voided')
+          .setDescription('Set voided status (default false if provided)')
+          .setRequired(false)
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
