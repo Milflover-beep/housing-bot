@@ -167,8 +167,8 @@ module.exports = function applicationsCommands(ctx) {
     if (!interaction.guild) {
       return interaction.editReply({ content: '❌ Use this command in a server.' });
     }
-    const ignOpt = interaction.options.getString('ign');
-    const ign = ignOpt && String(ignOpt).trim() ? normalizeIgn(ignOpt) : null;
+    const ign = normalizeIgn(interaction.options.getString('ign', true));
+    const typeStr = interaction.options.getString('type', true);
     const discordUser = interaction.options.getUser('discord', true);
 
     try {
@@ -182,9 +182,9 @@ module.exports = function applicationsCommands(ctx) {
 
     await sendApplicationResultLog(interaction, {
       status: 'aborted',
-      ign: ign || 'N/A',
+      ign,
       discordMention: `<@${discordUser.id}>`,
-      rankType: 'N/A',
+      rankType: RANK_LABEL[typeStr] || typeStr,
       cooldown: 'None',
       handledBy: `<@${interaction.user.id}>`,
     });
@@ -315,7 +315,18 @@ module.exports = function applicationsCommands(ctx) {
       new SlashCommandBuilder()
         .setName('abort')
         .setDescription('Abort an application: remove applicant role (no cooldown)')
-        .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(false))
+        .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
+        .addStringOption((o) =>
+          o
+            .setName('type')
+            .setDescription('Rank ladder they are applying for')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Prime', value: 'prime' },
+              { name: 'Elite', value: 'elite' },
+              { name: 'Apex', value: 'apex' }
+            )
+        )
         .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
       new SlashCommandBuilder()
         .setName('accept')
