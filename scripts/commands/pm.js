@@ -28,6 +28,15 @@ module.exports = function pmCommands(ctx) {
     return `\`${r.ign}\` — ping ${r.ping ?? '—'}`;
   }
 
+  function sortByPingAsc(list) {
+    return [...list].sort((a, b) => {
+      const ap = Number.isFinite(a?.ping) ? a.ping : Number.POSITIVE_INFINITY;
+      const bp = Number.isFinite(b?.ping) ? b.ping : Number.POSITIVE_INFINITY;
+      if (ap !== bp) return ap - bp;
+      return String(a?.ign || '').localeCompare(String(b?.ign || ''));
+    });
+  }
+
   function truncateEmbedField(text, max = 1020) {
     if (text.length <= max) return text;
     return `${text.slice(0, max - 20)}… _(truncated)_`;
@@ -250,12 +259,12 @@ module.exports = function pmCommands(ctx) {
     }
     const section = (list) => truncateEmbedField(list.length ? list.map(formatPmRow).join('\n') : '_None_');
     const fields = [
-      { name: 'Apex Manager', value: section(buckets.A), inline: false },
-      { name: 'Elite Manager', value: section(buckets.E), inline: false },
-      { name: 'Prime Manager', value: section(buckets.P), inline: false },
+      { name: 'Apex Manager', value: section(sortByPingAsc(buckets.A)), inline: false },
+      { name: 'Elite Manager', value: section(sortByPingAsc(buckets.E)), inline: false },
+      { name: 'Prime Manager', value: section(sortByPingAsc(buckets.P)), inline: false },
     ];
     if (buckets.NA.length > 0) {
-      fields.push({ name: 'N/A', value: section(buckets.NA), inline: false });
+      fields.push({ name: 'N/A', value: section(sortByPingAsc(buckets.NA)), inline: false });
     }
     const embed = new EmbedBuilder()
       .setTitle('📋 PM list')
