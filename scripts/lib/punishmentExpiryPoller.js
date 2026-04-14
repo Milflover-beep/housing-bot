@@ -39,8 +39,8 @@ function buildExpiryEmbed(row) {
 }
 
 /**
- * When a manager accepts /checkqueue, `reversal_remind_at` = DB time at accept + cooldown (from `cooldown_raw`).
- * This loop finds rows where that time has passed and posts a ping. Poll often enough for short post-accept windows (e.g. 1m).
+ * `reversal_remind_at` is set when punishment is logged.
+ * This loop finds rows where that time has passed and posts a ping, even if queue review is still pending.
  */
 function startPunishmentExpiryPoller(client, pool) {
   const intervalMs = 15_000;
@@ -65,7 +65,7 @@ function startPunishmentExpiryPoller(client, pool) {
          SET reversal_reminded = true
          WHERE id IN (
            SELECT id FROM punishment_logs
-           WHERE status = 'active' AND punishment_status = 'active'
+           WHERE punishment_status IN ('pending_review', 'active')
              AND reversal_remind_at IS NOT NULL
              AND reversal_remind_at <= NOW()
              AND COALESCE(reversal_reminded, false) = false

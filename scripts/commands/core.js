@@ -258,7 +258,7 @@ module.exports = function coreCommands(ctx) {
     let eligible = true;
     const issues = [];
 
-    /** API/config failures: do not block eligibility; staff verify with `/hypixel`. PM checks skip Hypixel entirely. */
+    /** API/config failures: do not block eligibility; PM checks skip Hypixel entirely. */
     let hypixelDegradedNote = '';
     if (!isPmCheck) {
       if (!hypixelResult.ok) {
@@ -266,7 +266,7 @@ module.exports = function coreCommands(ctx) {
           hypixelResult.message.length > 500
             ? `${hypixelResult.message.slice(0, 497)}…`
             : hypixelResult.message;
-        hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Use **\`/hypixel\`** to check manually before applying.`;
+        hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Verify manually before applying.`;
       } else if (hypixelResult.level < 30) {
         eligible = false;
         if (!hypixelResult.hasPlayer) {
@@ -794,13 +794,13 @@ module.exports = function coreCommands(ctx) {
     }
     if (lv >= 2) {
       add('Staff+', [
-        '`/hypixel`',
         '`/deny`',
         '`/accept`',
         '`/score`',
         '`/log` (→ manager queue)',
         '`/history`',
         '`/report`',
+        '`/staffstats`',
         '`/viewalts`',
         '`/viewblacklist`',
         '`/bancheck`',
@@ -839,6 +839,7 @@ module.exports = function coreCommands(ctx) {
     if (lv >= 4) {
       add('Admin+', [
         '`/addproxy`',
+        '`/adminlog`',
         '`/watchlist`',
         '`/deletepm`',
         '`/edituuid`',

@@ -68,6 +68,9 @@ async function ensureDatabaseSchema(pool) {
       ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS reversal_reminded BOOLEAN DEFAULT FALSE;
     `);
     await client.query(`
+      ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS progressive_ban BOOLEAN DEFAULT TRUE;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS punishment_queue (
         id                 SERIAL PRIMARY KEY,
         ign                TEXT,
