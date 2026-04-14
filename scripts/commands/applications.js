@@ -4,6 +4,7 @@ const { syncTierListChannel } = require('../lib/tierListChannelSync');
 const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
 const RANK_LABEL = { prime: 'Prime', elite: 'Elite', apex: 'Apex' };
+const DEFAULT_DENY_ACCEPT_RESULTS_CHANNEL_ID = '1439866722038452314';
 
 module.exports = function applicationsCommands(ctx) {
   const {
@@ -47,6 +48,47 @@ module.exports = function applicationsCommands(ctx) {
     const fromRank = parseRoleIdList('RANK_REQUEST_PING_ROLE_ID');
     if (fromRank.length > 0) return fromRank[0];
     return DEFAULT_RANK_REQUEST_PING_ROLE_ID;
+  }
+
+  async function sendApplicationResultLog(interaction, data) {
+    try {
+      const channelId =
+        process.env.DENY_ACCEPT_RESULTS_CHANNEL_ID || DEFAULT_DENY_ACCEPT_RESULTS_CHANNEL_ID;
+      if (!channelId) return;
+      const channel = await interaction.client.channels.fetch(channelId);
+      if (!channel?.isTextBased?.()) return;
+
+      const statusColor = {
+        accepted: 0x2ecc71, // green
+        denied: 0xe74c3c, // red
+        aborted: 0xf1c40f, // yellow
+      };
+      const statusTitle = {
+        accepted: 'Application Accepted',
+        denied: 'Application Denied',
+        aborted: 'Application Aborted',
+      };
+
+      const embed = new EmbedBuilder()
+        .setTitle(statusTitle[data.status] || 'Application Update')
+        .setColor(statusColor[data.status] || 0x95a5a6)
+        .addFields(
+          { name: 'IGN', value: data.ign || 'N/A', inline: true },
+          { name: 'Discord', value: data.discordMention || 'N/A', inline: true },
+          { name: 'Rank Type', value: data.rankType || 'N/A', inline: true },
+          { name: 'Cooldown', value: data.cooldown || 'None', inline: true },
+          { name: 'Handled By', value: data.handledBy || 'N/A', inline: true }
+        )
+        .setTimestamp();
+
+      if (data.tier) {
+        embed.addFields({ name: 'Tier', value: data.tier, inline: true });
+      }
+
+      await channel.send({ embeds: [embed] });
+    } catch (e) {
+      console.warn('application result log channel send failed:', e?.message || e);
+    }
   }
 
   async function handleClearcooldown(interaction) {
@@ -109,6 +151,15 @@ module.exports = function applicationsCommands(ctx) {
           weeks > 1 ? 's' : ''
         }).`,
     });
+
+    await sendApplicationResultLog(interaction, {
+      status: 'denied',
+      ign,
+      discordMention: `<@${discordUser.id}>`,
+      rankType: RANK_LABEL[typeStr] || typeStr,
+      cooldown: `<t:${Math.floor(cooldownUntil.getTime() / 1000)}:F>`,
+      handledBy: `<@${interaction.user.id}>`,
+    });
   }
 
   async function handleAbort(interaction) {
@@ -120,6 +171,8 @@ module.exports = function applicationsCommands(ctx) {
     if (!interaction.guild) {
       return interaction.editReply({ content: '❌ Use this command in a server.' });
     }
+    const ignOpt = interaction.options.getString('ign');
+    const ign = ignOpt && String(ignOpt).trim() ? normalizeIgn(ignOpt) : null;
     const discordUser = interaction.options.getUser('discord', true);
 
     try {
@@ -130,6 +183,15 @@ module.exports = function applicationsCommands(ctx) {
     }
 
     await interaction.editReply({ content: '✅ Application aborted. Application role removed.' });
+
+    await sendApplicationResultLog(interaction, {
+      status: 'aborted',
+      ign: ign || 'N/A',
+      discordMention: `<@${discordUser.id}>`,
+      rankType: 'N/A',
+      cooldown: 'None',
+      handledBy: `<@${interaction.user.id}>`,
+    });
   }
 
   async function handleAccept(interaction) {
@@ -218,6 +280,16 @@ module.exports = function applicationsCommands(ctx) {
         `✅ Accepted **${ign}** (<@${discordUser.id}>) for **${typeStr}** (**${tier}**). ` +
         `Recorded in **tier_results** / **tier_history** and tier list channel synced. Applicant role removed.${note}`,
     });
+
+    await sendApplicationResultLog(interaction, {
+      status: 'accepted',
+      ign,
+      discordMention: `<@${discordUser.id}>`,
+      rankType: RANK_LABEL[typeStr] || typeStr,
+      cooldown: 'None',
+      tier,
+      handledBy: `<@${interaction.user.id}>`,
+    });
   }
 
   return {
@@ -247,6 +319,7 @@ module.exports = function applicationsCommands(ctx) {
       new SlashCommandBuilder()
         .setName('abort')
         .setDescription('Abort an application: remove applicant role (no cooldown)')
+        .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(false))
         .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
       new SlashCommandBuilder()
         .setName('accept')
