@@ -490,7 +490,7 @@ module.exports = function punishmentCommands(ctx) {
     const merged = [
       ...pun.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),
-        line: `**Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status})`,
+        line: `**Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status}) — Staff: **${row.staff_ign || '—'}**`,
       })),
       ...bl.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),

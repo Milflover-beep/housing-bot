@@ -36,7 +36,7 @@ module.exports = function coreCommands(ctx) {
     if (key === 'prime') return 'prime';
     if (key === 'elite') return 'elite';
     if (key === 'apex') return 'apex';
-    if (key === 'pm') return 'pm';
+    if (key === 'pm') return 'PM';
     return null;
   }
 
