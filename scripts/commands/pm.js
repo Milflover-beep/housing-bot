@@ -62,6 +62,26 @@ module.exports = function pmCommands(ctx) {
     return Number(n).toFixed(digits);
   }
 
+  const AVG_SCORE_FIGHT_CAP = 5000;
+
+  /** Average of this player's side points (same as /profile), capped fights. */
+  function avgSidePointsForRows(ignLower, rows) {
+    const ptsList = [];
+    for (const row of rows) {
+      const parsed = parseFinalScore(row.final_score);
+      if (!parsed) continue;
+      const won = String(row.winner_ign || '').trim().toLowerCase() === ignLower;
+      ptsList.push(clampSideScoreForStats(won ? parsed.winnerPts : parsed.loserPts));
+    }
+    if (!ptsList.length) return null;
+    return (ptsList.reduce((a, b) => a + b, 0) / ptsList.length).toFixed(2);
+  }
+
+  function dateRangeParams(start, end) {
+    if (start && end) return [new Date(start), new Date(end)];
+    return [null, null];
+  }
+
   /**
    * @param {string} ignLower
    * @param {Array<{ winner_ign: string, loser_ign: string, final_score: string, fight_type: string, fight_number: number, created_at: Date }>} rows oldest-first
@@ -370,11 +390,16 @@ module.exports = function pmCommands(ctx) {
           '❌ PM or higher only. If you have the role, enable **Server Members Intent** for the bot and restart it, then try again.',
       });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const ignOpt = interaction.options.getString('ign');
+    const ign = ignOpt && String(ignOpt).trim() ? normalizeIgn(ignOpt) : '';
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
+    const [rangeStart, rangeEnd] = dateRangeParams(start, end);
 
     if (debug) {
+      if (!ign) {
+        return interaction.editReply({ content: '❌ Provide an **ign** for debug mode.' });
+      }
       let q = `
         SELECT winner_ign, loser_ign, final_score, fight_type, fight_number, created_at
         FROM scores s
@@ -393,6 +418,114 @@ module.exports = function pmCommands(ctx) {
       footerParts.push(start && end ? `Range: ${start} – ${end}` : 'All recorded fights');
       embed.setFooter({ text: footerParts.join(' · ') });
       return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (!ign) {
+      const pmCount = await pool.query(`SELECT COUNT(*)::int AS c FROM pm_list`);
+      if ((pmCount.rows[0]?.c || 0) === 0) {
+        return interaction.editReply({
+          content: 'No one is on the PM list yet — add PMs with `/addpm` first.',
+        });
+      }
+
+      const top = await pool.query(
+        `WITH pm AS (
+           SELECT LOWER(TRIM(ign)) AS ign FROM pm_list
+         ),
+         participations AS (
+           SELECT LOWER(TRIM(s.winner_ign)) AS ign FROM scores s
+           WHERE s.is_voided = false
+             AND ($1::timestamptz IS NULL OR s.created_at >= $1)
+             AND ($2::timestamptz IS NULL OR s.created_at <= $2)
+           UNION ALL
+           SELECT LOWER(TRIM(s.loser_ign)) AS ign FROM scores s
+           WHERE s.is_voided = false
+             AND ($1::timestamptz IS NULL OR s.created_at >= $1)
+             AND ($2::timestamptz IS NULL OR s.created_at <= $2)
+         )
+         SELECT p.ign, COUNT(*)::int AS fights
+         FROM participations p
+         INNER JOIN pm ON pm.ign = p.ign
+         GROUP BY p.ign
+         ORDER BY fights DESC
+         LIMIT 2`,
+        [rangeStart, rangeEnd]
+      );
+
+      if (top.rows.length === 0) {
+        return interaction.editReply({
+          content: 'No fight data for PMs in this range (or no overlapping fights with `pm_list`).',
+        });
+      }
+
+      const displayNames = await pool.query(
+        `SELECT LOWER(TRIM(ign)) AS k, ign FROM pm_list WHERE LOWER(TRIM(ign)) = ANY($1::text[])`,
+        [top.rows.map((r) => r.ign)]
+      );
+      const nameByLower = Object.fromEntries(
+        displayNames.rows.map((r) => [r.k.toLowerCase(), r.ign])
+      );
+
+      const fields = [];
+      const medals = ['🥇', '🥈'];
+      for (let i = 0; i < 2; i++) {
+        const row = top.rows[i];
+        if (!row) {
+          fields.push({
+            name: `${medals[i]} #${i + 1}`,
+            value: '—',
+            inline: true,
+          });
+          continue;
+        }
+        const ignLower = row.ign;
+        const display = nameByLower[ignLower] || ignLower;
+        const fights = row.fights || 0;
+
+        const wRes = await pool.query(
+          `SELECT COUNT(*)::int AS c FROM scores s
+           WHERE s.is_voided = false
+             AND LOWER(TRIM(s.winner_ign)) = $1
+             AND ($2::timestamptz IS NULL OR s.created_at >= $2)
+             AND ($3::timestamptz IS NULL OR s.created_at <= $3)`,
+          [ignLower, rangeStart, rangeEnd]
+        );
+        const wins = wRes.rows[0]?.c || 0;
+        const winRate = fights > 0 ? ((wins / fights) * 100).toFixed(2) : '0.00';
+
+        const avgRows = await pool.query(
+          `SELECT final_score, winner_ign, loser_ign FROM scores s
+           WHERE (LOWER(TRIM(s.winner_ign)) = $1 OR LOWER(TRIM(s.loser_ign)) = $1)
+           AND s.is_voided = false
+           AND ($2::timestamptz IS NULL OR s.created_at >= $2)
+           AND ($3::timestamptz IS NULL OR s.created_at <= $3)
+           ORDER BY s.id DESC
+           LIMIT $4`,
+          [ignLower, rangeStart, rangeEnd, AVG_SCORE_FIGHT_CAP]
+        );
+        const avgScore = avgSidePointsForRows(ignLower, avgRows.rows) ?? '—';
+
+        fields.push({
+          name: `${medals[i]} #${i + 1} — ${display}`,
+          value: `**Fights:** ${fights}\n**Win Rate:** ${winRate}%\n**Avg Score:** ${avgScore}`,
+          inline: true,
+        });
+      }
+
+      const rangeLine =
+        start && end
+          ? `**Date Range:** ${start} to ${end}`
+          : '**Date Range:** All time';
+
+      const embed = new EmbedBuilder()
+        .setTitle('📊 Top PM Fight Statistics')
+        .setColor(0x1abc9c)
+        .setDescription(`Top 2 fighters with most fights\n\n${rangeLine}`)
+        .addFields(fields)
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+      return;
     }
 
     let sql = `
@@ -475,9 +608,12 @@ module.exports = function pmCommands(ctx) {
       ),
     new SlashCommandBuilder()
       .setName('pmstats')
-      .setDescription('Fight stats for one PM (wins, losses, win rate)')
+      .setDescription('PM fight stats, or top 2 PMs by fights when ign is omitted')
       .addStringOption((o) =>
-        o.setName('ign').setDescription('Minecraft IGN (PM)').setRequired(true)
+        o
+          .setName('ign')
+          .setDescription('Minecraft IGN (omit for top 2 leaderboard from pm_list)')
+          .setRequired(false)
       )
       .addStringOption((o) =>
         o.setName('start-date').setDescription('ISO date start (optional)').setRequired(false)
