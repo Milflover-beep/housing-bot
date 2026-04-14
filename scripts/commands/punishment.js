@@ -429,11 +429,12 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const staffIgn = normalizeIgn(interaction.options.getString('ign'));
+    const staffUser = interaction.options.getUser('discord', true);
+    const staffId = String(staffUser.id);
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
-    const params = [staffIgn];
-    let where = `LOWER(TRIM(staff_ign)) = $1`;
+    const params = [staffId];
+    let where = `discord_user = $1`;
     if (start && end) {
       where += ' AND created_at BETWEEN $2 AND $3';
       params.push(new Date(start), new Date(end));
@@ -454,9 +455,10 @@ module.exports = function punishmentCommands(ctx) {
     const decided = accepted + denied;
     const accuracy = decided > 0 ? ((accepted / decided) * 100).toFixed(1) : '0.0';
     const embed = new EmbedBuilder()
-      .setTitle(`Staff stats: ${staffIgn}`)
+      .setTitle(`Staff stats: ${staffUser.username}`)
       .setColor(0x3498db)
       .addFields(
+        { name: 'Staff', value: `<@${staffId}>`, inline: true },
         { name: 'Logs made', value: String(total), inline: true },
         { name: 'Accepted', value: String(accepted), inline: true },
         { name: 'Denied', value: String(denied), inline: true },
@@ -636,7 +638,7 @@ module.exports = function punishmentCommands(ctx) {
     new SlashCommandBuilder()
       .setName('staffstats')
       .setDescription('View punishment log count and accuracy for a staff member')
-      .addStringOption((o) => o.setName('ign').setDescription('Staff IGN / username').setRequired(true))
+      .addUserOption((o) => o.setName('discord').setDescription('Staff Discord user').setRequired(true))
       .addStringOption((o) =>
         o.setName('start-date').setDescription('ISO date start (optional)').setRequired(false)
       )
