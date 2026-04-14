@@ -39,15 +39,11 @@ module.exports = function applicationsCommands(ctx) {
     }
   }
 
-  /** Role to ping on /accept rank-request message: ACCEPT_PING_ROLE_ID, else RANK_REQUEST_PING_ROLE_ID, else default. */
-  const DEFAULT_RANK_REQUEST_PING_ROLE_ID = '1141836985711997039';
+  /** Role to ping on /accept rank-request message. */
 
   function acceptPingRoleId() {
     const fromAccept = parseRoleIdList('ACCEPT_PING_ROLE_ID');
-    if (fromAccept.length > 0) return fromAccept[0];
-    const fromRank = parseRoleIdList('RANK_REQUEST_PING_ROLE_ID');
-    if (fromRank.length > 0) return fromRank[0];
-    return DEFAULT_RANK_REQUEST_PING_ROLE_ID;
+    return fromAccept.length > 0 ? fromAccept[0] : null;
   }
 
   async function sendApplicationResultLog(interaction, data) {
