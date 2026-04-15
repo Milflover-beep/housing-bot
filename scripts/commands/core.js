@@ -522,7 +522,20 @@ module.exports = function coreCommands(ctx) {
       inline: true,
     });
 
-    await interaction.editReply({ embeds: [replyEmbed] });
+    const replyMessage = await interaction.editReply({ embeds: [replyEmbed] });
+
+    if (interaction.guild && interaction.channel && CHECK_RENAME_CATEGORY_IDS.length > 0) {
+      try {
+        const categoryId = await resolveChannelCategoryId(interaction.channel, interaction.guild);
+        const shouldPin = categoryId && CHECK_RENAME_CATEGORY_IDS.includes(categoryId);
+        if (shouldPin && typeof replyMessage?.pin === 'function') {
+          await replyMessage.pin('Pinned automatically for /score in application ticket');
+        }
+      } catch (e) {
+        console.warn('score: ticket pin failed:', e?.message || e);
+      }
+    }
+
     await sendFightScoreLogEmbed(interaction.client, embed);
   }
 
