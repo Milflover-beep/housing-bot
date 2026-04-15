@@ -1,0 +1,37 @@
+/score winner-ign: alinaur loser-ign: Conjunct final-score: 10-6 fight-number: 1 fight-type: prime
+/score winner-ign: alinaur loser-ign: oswiecony_pro final-score: 10-0 fight-number: 1 fight-type: prime
+/score winner-ign: alinaur loser-ign: underally final-score: 10-6 fight-number: 1 fight-type: prime
+/score winner-ign: alinaur loser-ign: techyasso final-score: 10-1 fight-number: 2 fight-type: prime
+/score winner-ign: alinaur loser-ign: leoo233 final-score: 10-4 fight-number: 1 fight-type: prime
+
+/score winner-ign: SunMonarch loser-ign: Iretry final-score: 10-0 fight-number: 1 fight-type: elite
+/score winner-ign: SunMonarch loser-ign: Aquafull final-score: 10-7 fight-number: 1 fight-type: elite
+/score winner-ign: SunMonarch loser-ign: Lyophilize final-score: 10-7 fight-number: 1 fight-type: prime
+
+/score winner-ign: Daltso loser-ign: PastorVanNice final-score: 10-1 fight-number: 1 fight-type: prime
+/score winner-ign: Daltso loser-ign: Minecraft9895 final-score: 10-7 fight-number: 1 fight-type: prime
+
+/score winner-ign: thornsk1n loser-ign: Underally final-score: 10-1 fight-number: 2 fight-type: prime
+/score winner-ign: thornsk1n loser-ign: hkimn23 final-score: 10-1 fight-number: 1 fight-type: elite
+/score winner-ign: thornsk1n loser-ign: notalexyt final-score: 10-0 fight-number: 1 fight-type: prime
+/score winner-ign: thornsk1n loser-ign: ilyWinds final-score: 10-2 fight-number: 2 fight-type: prime
+
+/score winner-ign: Daltso loser-ign: Aquafull final-score: 10-2 fight-number: 2 fight-type: elite
+/score winner-ign: Daltso loser-ign: sdvk final-score: 10-2 fight-number: 2 fight-type: prime
+/score winner-ign: Daltso loser-ign: Silhouetted final-score: 10-1 fight-number: 2 fight-type: prime
+/score winner-ign: Daltso loser-ign: lpul final-score: 10-1 fight-number: 2 fight-type: prime
+/score winner-ign: Daltso loser-ign: Coders final-score: 10-5 fight-number: 1 fight-type: prime
+
+/score winner-ign: SunMonarch loser-ign: Silhouetted final-score: 10-3 fight-number: 1 fight-type: prime
+/score winner-ign: SunMonarch loser-ign: sdvk final-score: 10-5 fight-number: 1 fight-type: prime
+/score winner-ign: ggManL loser-ign: SunMonarch final-score: 10-9 fight-number: 1 fight-type: elite
+/score winner-ign: SunMonarch loser-ign: Kravings final-score: 10-7 fight-number: 2 fight-type: prime
+/score winner-ign: SunMonarch loser-ign: ShockYT final-score: 10-0 fight-number: 1 fight-type: elite
+
+/score winner-ign: alinaur loser-ign: iRetry final-score: 10-1 fight-number: 2 fight-type: elite
+/score winner-ign: Pyrade1 loser-ign: Mazsalaca final-score: 10-3 fight-number: 2 fight-type: prime
+/score winner-ign: Ecuadors loser-ign: ggManL final-score: 10-3 fight-number: 1 fight-type: apex
+/score winner-ign: alinaur loser-ign: TrexToggled final-score: 10-3 fight-number: 1 fight-type: prime
+
+/score winner-ign: Dozzs loser-ign: nuxn final-score: 10-4 fight-number: 2 fight-type: prime
+/score winner-ign: Dozzs loser-ign: iFidelity final-score: 10-0 fight-number: 1 fight-type: prime

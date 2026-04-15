@@ -20,6 +20,20 @@ module.exports = function punishmentCommands(ctx) {
     formatEvidencePlainUrls,
   } = ctx;
 
+  function formatRemaining(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return 'expired';
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (parts.length === 0) parts.push('<1m');
+    return parts.join(' ');
+  }
+
   function buildUnbanEmbed(logRow) {
     const issued = logRow.date || logRow.created_at;
     const exp = logRow.reversal_remind_at;
@@ -476,7 +490,7 @@ module.exports = function punishmentCommands(ctx) {
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const [pun, bl] = await Promise.all([
       pool.query(
-        `SELECT id, punishment, punishment_details, status, punishment_status, created_at
+        `SELECT id, punishment, punishment_details, status, punishment_status, cooldown_raw, reversal_remind_at, created_at
          FROM punishment_logs WHERE LOWER(user_ign) = $1 ORDER BY created_at DESC LIMIT 25`,
         [ign]
       ),
@@ -489,7 +503,18 @@ module.exports = function punishmentCommands(ctx) {
     const merged = [
       ...pun.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),
-        line: `**Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status}) — Staff: **${row.staff_ign || '—'}**`,
+        line: (() => {
+          let remaining = 'n/a';
+          if (String(row.cooldown_raw || '').trim() === '-1') {
+            remaining = 'permanent (never)';
+          } else if (row.reversal_remind_at) {
+            const endAt = new Date(row.reversal_remind_at);
+            remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
+          } else if (row.status === 'active' && row.punishment_status === 'active') {
+            remaining = 'unknown';
+          }
+          return `**Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status}) — Remaining: **${remaining}**`;
+        })(),
       })),
       ...bl.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),
