@@ -381,14 +381,15 @@ module.exports = function punishmentCommands(ctx) {
       cooldownRaw = await nextProgressiveCooldownRaw(userIgn);
       progressiveBan = true;
     }
-    const cooldownMs = parseCooldownToMs(cooldownRaw);
-    if (cooldownMs === undefined || cooldownMs === null || cooldownMs <= 0) {
+    const isPermanentBan = cooldownRaw === '-1';
+    const cooldownMs = isPermanentBan ? null : parseCooldownToMs(cooldownRaw);
+    if (!isPermanentBan && (cooldownMs === undefined || cooldownMs === null || cooldownMs <= 0)) {
       return interaction.editReply({
         content:
-          '❌ Invalid **ban duration**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`). Leave blank to use normal progressive duration.',
+          '❌ Invalid **ban duration**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`), or `-1` for permanent. Leave blank to use normal progressive duration.',
       });
     }
-    const reversalAt = new Date(Date.now() + cooldownMs);
+    const reversalAt = isPermanentBan ? null : new Date(Date.now() + cooldownMs);
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
 
@@ -412,7 +413,13 @@ module.exports = function punishmentCommands(ctx) {
     await interaction.editReply({
       content:
         `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to manager review queue.\n` +
-        `${progressiveBan ? 'Auto progressive ban duration' : 'Custom ban duration'}: **${cooldownRaw}**.`,
+        `${
+          progressiveBan
+            ? 'Auto progressive ban duration'
+            : isPermanentBan
+              ? 'Custom ban duration (permanent)'
+              : 'Custom ban duration'
+        }: **${isPermanentBan ? 'permanent' : cooldownRaw}**.`,
     });
   }
 
@@ -618,7 +625,9 @@ module.exports = function punishmentCommands(ctx) {
       .addStringOption((o) =>
         o
           .setName('ban-duration')
-          .setDescription('Optional custom ban duration: d=days h=hours m=minutes (e.g. 1d, 12h, 1m)')
+          .setDescription(
+            'Optional custom ban duration: d=days h=hours m=minutes (e.g. 1d, 12h, 1m), or -1 for permanent'
+          )
           .setRequired(false)
       )
       .addStringOption((o) =>
