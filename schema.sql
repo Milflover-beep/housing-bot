@@ -59,6 +59,21 @@ CREATE TABLE IF NOT EXISTS pm_list (
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS pm_membership_periods (
+  id         SERIAL PRIMARY KEY,
+  ign        TEXT NOT NULL,
+  start_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  end_at     TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS pm_membership_periods_ign_start_idx
+ON pm_membership_periods (LOWER(TRIM(ign)), start_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS pm_membership_periods_open_one_idx
+ON pm_membership_periods (LOWER(TRIM(ign)))
+WHERE end_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS proxies (
   id         SERIAL PRIMARY KEY,
   content    TEXT,

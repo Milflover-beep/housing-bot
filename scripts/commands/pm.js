@@ -95,6 +95,23 @@ module.exports = function pmCommands(ctx) {
     return [null, null];
   }
 
+  async function ensureOpenPmMembershipPeriod(client, ign, startAt = null) {
+    const open = await client.query(
+      `SELECT id
+       FROM pm_membership_periods
+       WHERE LOWER(TRIM(ign)) = $1
+         AND end_at IS NULL
+       LIMIT 1`,
+      [ign]
+    );
+    if (open.rows.length > 0) return;
+    await client.query(
+      `INSERT INTO pm_membership_periods (ign, start_at, end_at, created_at)
+       VALUES ($1, COALESCE($2::timestamptz, NOW()), NULL, NOW())`,
+      [ign, startAt]
+    );
+  }
+
   /**
    * @param {string} ignLower
    * @param {Array<{ winner_ign: string, loser_ign: string, final_score: string, fight_type: string, fight_number: number, created_at: Date }>} rows oldest-first
@@ -292,26 +309,37 @@ module.exports = function pmCommands(ctx) {
     const mgrType = parseManagerType(interaction.options.getString('manager-type'));
     const pingVal = ping === null ? null : ping;
     const uuidVal = uuid && uuid.trim() ? uuid.trim() : null;
+    const client = await pool.connect();
     try {
-      await pool.query(
-        `INSERT INTO pm_list (ign, ping, uuid, manager_type, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-        [ign, pingVal, uuidVal, mgrType]
-      );
-    } catch (e) {
-      if (e.code === '23505' && /pm_list/i.test(String(e.message))) {
-        await pool.query(
-          `SELECT setval(
-            pg_get_serial_sequence('pm_list', 'id'),
-            (SELECT MAX(id) FROM pm_list)
-          )`
-        );
-        await pool.query(
+      await client.query('BEGIN');
+      try {
+        await client.query(
           `INSERT INTO pm_list (ign, ping, uuid, manager_type, created_at) VALUES ($1, $2, $3, $4, NOW())`,
           [ign, pingVal, uuidVal, mgrType]
         );
-      } else {
-        throw e;
+      } catch (e) {
+        if (e.code === '23505' && /pm_list/i.test(String(e.message))) {
+          await client.query(
+            `SELECT setval(
+              pg_get_serial_sequence('pm_list', 'id'),
+              (SELECT MAX(id) FROM pm_list)
+            )`
+          );
+          await client.query(
+            `INSERT INTO pm_list (ign, ping, uuid, manager_type, created_at) VALUES ($1, $2, $3, $4, NOW())`,
+            [ign, pingVal, uuidVal, mgrType]
+          );
+        } else {
+          throw e;
+        }
       }
+      await ensureOpenPmMembershipPeriod(client, ign);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
     }
     await interaction.editReply({ content: `✅ Added **${ign}** to PM list.` });
   }
@@ -326,10 +354,27 @@ module.exports = function pmCommands(ctx) {
       });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
-    const q = await pool.query(
-      'DELETE FROM pm_list WHERE LOWER(TRIM(ign)) = $1 RETURNING ign',
-      [ign]
-    );
+    const client = await pool.connect();
+    let q;
+    try {
+      await client.query('BEGIN');
+      q = await client.query('DELETE FROM pm_list WHERE LOWER(TRIM(ign)) = $1 RETURNING ign', [ign]);
+      if (q.rows.length > 0) {
+        await client.query(
+          `UPDATE pm_membership_periods
+           SET end_at = NOW()
+           WHERE LOWER(TRIM(ign)) = $1
+             AND end_at IS NULL`,
+          [ign]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
     if (q.rows.length === 0) {
       return interaction.editReply({ content: `❌ No PM list entry for **${ign}**.` });
     }
@@ -429,6 +474,10 @@ module.exports = function pmCommands(ctx) {
           wins: winUpd.rowCount || 0,
           losses: lossUpd.rowCount || 0,
         };
+        await client.query(`UPDATE pm_membership_periods SET ign = $1 WHERE LOWER(TRIM(ign)) = $2`, [
+          newIgn,
+          oldIgn,
+        ]);
       }
       await client.query('COMMIT');
     } catch (err) {
@@ -482,11 +531,18 @@ module.exports = function pmCommands(ctx) {
         SELECT winner_ign, loser_ign, final_score, fight_type, fight_number, created_at
         FROM scores s
         WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1)
-        AND s.is_voided = false`;
+        AND s.is_voided = false
+        AND EXISTS (
+          SELECT 1
+          FROM pm_membership_periods m
+          WHERE LOWER(TRIM(m.ign)) = $1
+            AND s.created_at >= m.start_at
+            AND (m.end_at IS NULL OR s.created_at <= m.end_at)
+        )`;
       const params = [ign];
       if (start && end) {
         q += ' AND s.created_at BETWEEN $2 AND $3';
-        params.push(new Date(start), new Date(end));
+        params.push(rangeStart, rangeEnd);
       }
       q += ' ORDER BY s.created_at ASC, s.id ASC LIMIT 3000';
       const detail = await pool.query(q, params);
@@ -516,11 +572,25 @@ module.exports = function pmCommands(ctx) {
            WHERE s.is_voided = false
              AND ($1::timestamptz IS NULL OR s.created_at >= $1)
              AND ($2::timestamptz IS NULL OR s.created_at <= $2)
+             AND EXISTS (
+               SELECT 1
+               FROM pm_membership_periods m
+               WHERE LOWER(TRIM(m.ign)) = LOWER(TRIM(s.winner_ign))
+                 AND s.created_at >= m.start_at
+                 AND (m.end_at IS NULL OR s.created_at <= m.end_at)
+             )
            UNION ALL
            SELECT LOWER(TRIM(s.loser_ign)) AS ign FROM scores s
            WHERE s.is_voided = false
              AND ($1::timestamptz IS NULL OR s.created_at >= $1)
              AND ($2::timestamptz IS NULL OR s.created_at <= $2)
+             AND EXISTS (
+               SELECT 1
+               FROM pm_membership_periods m
+               WHERE LOWER(TRIM(m.ign)) = LOWER(TRIM(s.loser_ign))
+                 AND s.created_at >= m.start_at
+                 AND (m.end_at IS NULL OR s.created_at <= m.end_at)
+             )
          )
          SELECT p.ign, COUNT(*)::int AS fights
          FROM participations p
@@ -566,7 +636,14 @@ module.exports = function pmCommands(ctx) {
            WHERE s.is_voided = false
              AND LOWER(TRIM(s.winner_ign)) = $1
              AND ($2::timestamptz IS NULL OR s.created_at >= $2)
-             AND ($3::timestamptz IS NULL OR s.created_at <= $3)`,
+             AND ($3::timestamptz IS NULL OR s.created_at <= $3)
+             AND EXISTS (
+               SELECT 1
+               FROM pm_membership_periods m
+               WHERE LOWER(TRIM(m.ign)) = $1
+                 AND s.created_at >= m.start_at
+                 AND (m.end_at IS NULL OR s.created_at <= m.end_at)
+             )`,
           [ignLower, rangeStart, rangeEnd]
         );
         const wins = wRes.rows[0]?.c || 0;
@@ -578,6 +655,13 @@ module.exports = function pmCommands(ctx) {
            AND s.is_voided = false
            AND ($2::timestamptz IS NULL OR s.created_at >= $2)
            AND ($3::timestamptz IS NULL OR s.created_at <= $3)
+           AND EXISTS (
+             SELECT 1
+             FROM pm_membership_periods m
+             WHERE LOWER(TRIM(m.ign)) = $1
+               AND s.created_at >= m.start_at
+               AND (m.end_at IS NULL OR s.created_at <= m.end_at)
+           )
            ORDER BY s.id DESC
            LIMIT $4`,
           [ignLower, rangeStart, rangeEnd, AVG_SCORE_FIGHT_CAP]
@@ -614,11 +698,18 @@ module.exports = function pmCommands(ctx) {
         SUM(CASE WHEN LOWER(s.loser_ign) = $1 THEN 1 ELSE 0 END)::int AS losses
       FROM scores s
       WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1)
-      AND s.is_voided = false`;
+      AND s.is_voided = false
+      AND EXISTS (
+        SELECT 1
+        FROM pm_membership_periods m
+        WHERE LOWER(TRIM(m.ign)) = $1
+          AND s.created_at >= m.start_at
+          AND (m.end_at IS NULL OR s.created_at <= m.end_at)
+      )`;
     const params = [ign];
     if (start && end) {
       sql += ' AND s.created_at BETWEEN $2 AND $3';
-      params.push(new Date(start), new Date(end));
+      params.push(rangeStart, rangeEnd);
     }
     const stats = await pool.query(sql, params);
 
@@ -693,11 +784,11 @@ module.exports = function pmCommands(ctx) {
       ),
     new SlashCommandBuilder()
       .setName('pmstats')
-      .setDescription('PM fight stats, or top 2 PMs by fights when ign is omitted')
+      .setDescription('PM fight stats during PM membership periods, or PM leaderboard when ign is omitted')
       .addStringOption((o) =>
         o
           .setName('ign')
-          .setDescription('Minecraft IGN (omit for top 2 leaderboard from pm_list)')
+          .setDescription('Minecraft IGN (omit for PM leaderboard from pm_list)')
           .setRequired(false)
       )
       .addStringOption((o) =>
