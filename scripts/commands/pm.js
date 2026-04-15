@@ -347,17 +347,48 @@ module.exports = function pmCommands(ctx) {
           '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const oldIgn = normalizeIgn(interaction.options.getString('old-ign'));
+    const newIgnOpt = interaction.options.getString('new-ign');
+    const newIgn =
+      newIgnOpt && String(newIgnOpt).trim() ? normalizeIgn(newIgnOpt) : null;
     const ping = interaction.options.getInteger('ping');
     const mgrOpt = interaction.options.getString('manager-type');
-    if (ping === null && mgrOpt === null) {
+
+    const wantsRename = newIgn && newIgn !== oldIgn;
+    if (ping === null && mgrOpt === null && !wantsRename) {
       return interaction.editReply({
-        content: '❌ Provide at least **ping** or **manager-type** to update.',
+        content:
+          '❌ Provide at least **new-ign** (different from old), **ping**, or **manager-type** to update.',
       });
     }
+
+    const currentRows = await pool.query('SELECT id FROM pm_list WHERE LOWER(TRIM(ign)) = $1', [
+      oldIgn,
+    ]);
+    if (currentRows.rows.length === 0) {
+      return interaction.editReply({ content: `❌ No PM list entry for **${oldIgn}**.` });
+    }
+    const currentIds = new Set(currentRows.rows.map((r) => r.id));
+
+    if (wantsRename) {
+      const taken = await pool.query('SELECT id FROM pm_list WHERE LOWER(TRIM(ign)) = $1', [
+        newIgn,
+      ]);
+      const takenByOther = taken.rows.some((r) => !currentIds.has(r.id));
+      if (takenByOther) {
+        return interaction.editReply({
+          content: `❌ IGN **${newIgn}** is already on the PM list.`,
+        });
+      }
+    }
+
     const parts = [];
     const vals = [];
     let n = 1;
+    if (wantsRename) {
+      parts.push(`ign = $${n++}`);
+      vals.push(newIgn);
+    }
     if (ping !== null) {
       parts.push(`ping = $${n++}`);
       vals.push(ping);
@@ -366,20 +397,20 @@ module.exports = function pmCommands(ctx) {
       parts.push(`manager_type = $${n++}`);
       vals.push(parseManagerType(mgrOpt));
     }
-    vals.push(ign);
+    vals.push(oldIgn);
     const q = await pool.query(
       `UPDATE pm_list SET ${parts.join(', ')} WHERE LOWER(TRIM(ign)) = $${n} RETURNING ign`,
       vals
     );
     if (q.rows.length === 0) {
-      return interaction.editReply({ content: `❌ No PM list entry for **${ign}**.` });
+      return interaction.editReply({ content: `❌ No PM list entry for **${oldIgn}**.` });
     }
     const msg =
       q.rows.length === 1
         ? `✅ Updated **${q.rows[0].ign}**.`
-        : `✅ Updated **${q.rows.length}** PM list rows matching **${ign}**.`;
+        : `✅ Updated **${q.rows.length}** PM list rows matching **${oldIgn}**.`;
     const embed = new EmbedBuilder().setColor(0x1abc9c).setDescription(msg);
-    const headUrl = minecraftHeadUrl(q.rows[0]?.ign || ign);
+    const headUrl = minecraftHeadUrl(q.rows[0]?.ign || oldIgn);
     if (headUrl) embed.setThumbnail(headUrl);
     await interaction.editReply({ embeds: [embed] });
   }
@@ -603,8 +634,14 @@ module.exports = function pmCommands(ctx) {
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
       .setName('editpm')
-      .setDescription("Edit a PM's ping and/or manager type (Prime / Elite / Apex)")
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
+      .setDescription("Edit a PM's IGN, ping, and/or manager type (Prime / Elite / Apex)")
+      .addStringOption((o) => o.setName('old-ign').setDescription('Current Minecraft IGN').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('new-ign')
+          .setDescription('New Minecraft IGN (optional; rename without deleting the row)')
+          .setRequired(false)
+      )
       .addIntegerOption((o) =>
         o.setName('ping').setDescription('New ping (optional if updating manager type)').setRequired(false)
       )
