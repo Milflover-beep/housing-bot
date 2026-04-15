@@ -398,16 +398,50 @@ module.exports = function pmCommands(ctx) {
       vals.push(parseManagerType(mgrOpt));
     }
     vals.push(oldIgn);
-    const q = await pool.query(
-      `UPDATE pm_list SET ${parts.join(', ')} WHERE LOWER(TRIM(ign)) = $${n} RETURNING ign`,
-      vals
-    );
+
+    const client = await pool.connect();
+    let q;
+    let migrated = { wins: 0, losses: 0 };
+    try {
+      await client.query('BEGIN');
+      q = await client.query(
+        `UPDATE pm_list SET ${parts.join(', ')} WHERE LOWER(TRIM(ign)) = $${n} RETURNING ign`,
+        vals
+      );
+      if (q.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return interaction.editReply({ content: `❌ No PM list entry for **${oldIgn}**.` });
+      }
+      if (wantsRename) {
+        const winUpd = await client.query(
+          `UPDATE scores SET winner_ign = $1 WHERE LOWER(TRIM(winner_ign)) = $2`,
+          [newIgn, oldIgn]
+        );
+        const lossUpd = await client.query(
+          `UPDATE scores SET loser_ign = $1 WHERE LOWER(TRIM(loser_ign)) = $2`,
+          [newIgn, oldIgn]
+        );
+        migrated = {
+          wins: winUpd.rowCount || 0,
+          losses: lossUpd.rowCount || 0,
+        };
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
     if (q.rows.length === 0) {
       return interaction.editReply({ content: `❌ No PM list entry for **${oldIgn}**.` });
     }
+    const movedTotal = migrated.wins + migrated.losses;
     const msg =
       q.rows.length === 1
-        ? `✅ Updated **${q.rows[0].ign}**.`
+        ? wantsRename
+          ? `✅ Updated **${q.rows[0].ign}** and migrated **${movedTotal}** score-side entries from **${oldIgn}**.`
+          : `✅ Updated **${q.rows[0].ign}**.`
         : `✅ Updated **${q.rows.length}** PM list rows matching **${oldIgn}**.`;
     const embed = new EmbedBuilder().setColor(0x1abc9c).setDescription(msg);
     const headUrl = minecraftHeadUrl(q.rows[0]?.ign || oldIgn);
