@@ -1,4 +1,29 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+
+const WHOIS_FILE_PATH = path.join(__dirname, '..', 'data', 'whois.txt');
+
+function loadWhoisOverrides() {
+  try {
+    const raw = fs.readFileSync(WHOIS_FILE_PATH, 'utf8');
+    const map = new Map();
+    const lines = raw.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const sep = trimmed.indexOf('|');
+      if (sep <= 0) continue;
+      const ign = trimmed.slice(0, sep).trim().toLowerCase();
+      const text = trimmed.slice(sep + 1).trim();
+      if (!ign || !text) continue;
+      map.set(ign, text);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
 
 module.exports = function utilityCommands(ctx) {
   const { pool, requireLevel, isOwner, defer, normalizeIgn } = ctx;
@@ -97,22 +122,8 @@ module.exports = function utilityCommands(ctx) {
       return interaction.editReply({ content: 'Give an IGN to whois.' });
     }
     const key = raw.toLowerCase();
-    let text;
-    if (key === 'vverse') {
-      text = 'VVERSE is the best pvper.\nHe Who PVPs..';
-    } else if (key === 'lukewarmsoup') {
-      text = 'lukewarmsoup is the best admin';
-    } else if (key === 'sniper_man') {
-      text = 'sniper_man is the smp king';
-    } else if (key === 'rosyuv') {
-      text = 'rosyuv is the viltrumite emperor';
-    } else if (key === 'justiceforblacks') {
-      text = 'JusticeForBlacks is most certainly not mid';
-    } else if (key === 'ecuadors') {
-      text = 'Ecuadors is the one who knocks and coded this bot';
-    } else {
-      text = `${raw} is mid`;
-    }
+    const overrides = loadWhoisOverrides();
+    const text = overrides.get(key) || `${raw} is mid`;
     await interaction.editReply({ content: text });
   }
 
