@@ -87,7 +87,11 @@ module.exports = function pmCommands(ctx) {
   }
 
   function dateRangeParams(start, end) {
-    if (start && end) return [new Date(start), new Date(end)];
+    if (start && end) {
+      const startAt = new Date(`${start}T00:00:00.000Z`);
+      const endAt = new Date(`${end}T23:59:59.999Z`);
+      return [startAt, endAt];
+    }
     return [null, null];
   }
 
@@ -502,7 +506,7 @@ module.exports = function pmCommands(ctx) {
         });
       }
 
-      const leaderboardSize = start && end ? 3 : 5;
+      const leaderboardSize = start && end ? 3 : 6;
       const top = await pool.query(
         `WITH pm AS (
            SELECT LOWER(TRIM(ign)) AS ign FROM pm_list
