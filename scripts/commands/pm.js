@@ -502,6 +502,7 @@ module.exports = function pmCommands(ctx) {
         });
       }
 
+      const leaderboardSize = start && end ? 3 : 5;
       const top = await pool.query(
         `WITH pm AS (
            SELECT LOWER(TRIM(ign)) AS ign FROM pm_list
@@ -522,8 +523,8 @@ module.exports = function pmCommands(ctx) {
          INNER JOIN pm ON pm.ign = p.ign
          GROUP BY p.ign
          ORDER BY fights DESC
-         LIMIT 2`,
-        [rangeStart, rangeEnd]
+         LIMIT $3`,
+        [rangeStart, rangeEnd, leaderboardSize]
       );
 
       if (top.rows.length === 0) {
@@ -541,12 +542,12 @@ module.exports = function pmCommands(ctx) {
       );
 
       const fields = [];
-      const medals = ['🥇', '🥈'];
-      for (let i = 0; i < 2; i++) {
+      const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+      for (let i = 0; i < leaderboardSize; i++) {
         const row = top.rows[i];
         if (!row) {
           fields.push({
-            name: `${medals[i]} #${i + 1}`,
+            name: `${medals[i] || '🏅'} #${i + 1}`,
             value: '—',
             inline: true,
           });
@@ -580,7 +581,7 @@ module.exports = function pmCommands(ctx) {
         const avgScore = avgSidePointsForRows(ignLower, avgRows.rows) ?? '—';
 
         fields.push({
-          name: `${medals[i]} #${i + 1} — ${display}`,
+          name: `${medals[i] || '🏅'} #${i + 1} — ${display}`,
           value: `**Fights:** ${fights}\n**Win Rate:** ${winRate}%\n**Avg Score:** ${avgScore}`,
           inline: true,
         });
@@ -594,7 +595,7 @@ module.exports = function pmCommands(ctx) {
       const embed = new EmbedBuilder()
         .setTitle('📊 Top PM Fight Statistics')
         .setColor(0x1abc9c)
-        .setDescription(`Top 2 fighters with most fights\n\n${rangeLine}`)
+        .setDescription(`Top ${leaderboardSize} fighters with most fights\n\n${rangeLine}`)
         .addFields(fields)
         .setTimestamp();
 
