@@ -301,11 +301,8 @@ module.exports = function punishmentCommands(ctx) {
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence', true) || '';
     const evidenceTrim = evidence.trim();
-    if (!/https?:\/\//i.test(evidenceTrim)) {
-      return interaction.editReply({
-        content:
-          '❌ **Evidence** must include at least one **`http://`** or **`https://`** link (paste the proof URL).',
-      });
+    if (!evidenceTrim) {
+      return interaction.editReply({ content: '❌ **Evidence** is required.' });
     }
     const cooldownRaw = await nextProgressiveCooldownRaw(userIgn);
     const cooldownMs = parseCooldownToMs(cooldownRaw);
@@ -318,7 +315,7 @@ module.exports = function punishmentCommands(ctx) {
         `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
          VALUES ($1, $2, $3, $4, NOW(), $5, NULL, NOW(), 'queued', 'pending_review', $6, $7, false, true)
          RETURNING id`,
-        [userIgn, staffIgn, evidence, details, staffDiscordId, cooldownRaw || null, reversalAt]
+        [userIgn, staffIgn, evidenceTrim, details, staffDiscordId, cooldownRaw || null, reversalAt]
       );
       const logId = ins.rows[0].id;
 
@@ -376,14 +373,9 @@ module.exports = function punishmentCommands(ctx) {
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence') || '';
     const evidenceTrim = evidence.trim();
-    if (evidenceTrim && !/https?:\/\//i.test(evidenceTrim)) {
-      return interaction.editReply({
-        content:
-          '❌ **Evidence** must include at least one **`http://`** or **`https://`** link (paste the proof URL).',
-      });
-    }
-    const cooldownOpt = interaction.options.getString('cooldown');
-    let cooldownRaw = cooldownOpt && String(cooldownOpt).trim() ? String(cooldownOpt).trim() : '';
+    const banDurationOpt = interaction.options.getString('ban-duration');
+    let cooldownRaw =
+      banDurationOpt && String(banDurationOpt).trim() ? String(banDurationOpt).trim() : '';
     let progressiveBan = false;
     if (!cooldownRaw) {
       cooldownRaw = await nextProgressiveCooldownRaw(userIgn);
@@ -393,7 +385,7 @@ module.exports = function punishmentCommands(ctx) {
     if (cooldownMs === undefined || cooldownMs === null || cooldownMs <= 0) {
       return interaction.editReply({
         content:
-          '❌ Invalid **duration**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`). Leave blank to use normal progressive duration.',
+          '❌ Invalid **ban duration**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`). Leave blank to use normal progressive duration.',
       });
     }
     const reversalAt = new Date(Date.now() + cooldownMs);
@@ -420,7 +412,7 @@ module.exports = function punishmentCommands(ctx) {
     await interaction.editReply({
       content:
         `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to manager review queue.\n` +
-        `${progressiveBan ? 'Auto progressive duration' : 'Custom duration'}: **${cooldownRaw}**.`,
+        `${progressiveBan ? 'Auto progressive ban duration' : 'Custom ban duration'}: **${cooldownRaw}**.`,
     });
   }
 
@@ -615,24 +607,24 @@ module.exports = function punishmentCommands(ctx) {
       .addStringOption((o) =>
         o
           .setName('evidence')
-          .setDescription('Proof link(s) — must include https:// (shown as links in /checkqueue)')
+          .setDescription('Evidence / proof (text or links; shown in /checkqueue)')
           .setRequired(true)
       ),
     new SlashCommandBuilder()
       .setName('adminlog')
-      .setDescription('Admin: log punishment with custom duration (evidence optional)')
+      .setDescription('Admin: log punishment with optional custom ban duration (evidence optional)')
       .addStringOption((o) => o.setName('user-ign').setDescription('Player IGN').setRequired(true))
       .addStringOption((o) => o.setName('details').setDescription('Details').setRequired(true))
       .addStringOption((o) =>
         o
-          .setName('cooldown')
-          .setDescription('Optional custom duration: d=days h=hours m=minutes (e.g. 1d, 12h, 1m)')
+          .setName('ban-duration')
+          .setDescription('Optional custom ban duration: d=days h=hours m=minutes (e.g. 1d, 12h, 1m)')
           .setRequired(false)
       )
       .addStringOption((o) =>
         o
           .setName('evidence')
-          .setDescription('Optional proof link(s) (http/https)')
+          .setDescription('Optional evidence / proof (text or links)')
           .setRequired(false)
       ),
     new SlashCommandBuilder()
