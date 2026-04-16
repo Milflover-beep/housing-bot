@@ -13,6 +13,9 @@ module.exports = function punishmentCommands(ctx) {
   const {
     pool,
     requireLevel,
+    hasTierRole,
+    hasRoleId,
+    parseRoleIdList,
     defer,
     normalizeIgn,
     resolveGuildMember,
@@ -90,14 +93,89 @@ module.exports = function punishmentCommands(ctx) {
     return l.rows[0] || null;
   }
 
-  async function getPendingQueueItems() {
+  function headAdminRoleIds() {
+    return parseRoleIdList('BOT_ROLE_HEAD_ADMIN_ID');
+  }
+
+  function memberHasAnyRoleId(member, ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return false;
+    return ids.some((id) => hasRoleId(member, id));
+  }
+
+  async function evaluateQueueHierarchy(guild, approver, queueRow) {
+    if (!queueRow || queueRow.status !== 'pending') {
+      return { ok: false, reason: 'no_pending' };
+    }
+    const headAdminIds = headAdminRoleIds();
+    const approverIsHeadAdmin = memberHasAnyRoleId(approver, headAdminIds);
+    if (approverIsHeadAdmin) {
+      return { ok: true };
+    }
+
+    const targetStaff = await guild.members.fetch(String(queueRow.staff_discord_id)).catch(() => null);
+    if (!targetStaff) {
+      return { ok: false, reason: 'target_missing' };
+    }
+    const targetIsHeadAdmin = memberHasAnyRoleId(targetStaff, headAdminIds);
+    const approverIsAdmin = hasTierRole(approver, 'admin');
+    const approverIsManager = hasTierRole(approver, 'manager');
+    const targetIsAdmin = hasTierRole(targetStaff, 'admin');
+    const targetIsManager = hasTierRole(targetStaff, 'manager');
+    const targetIsStaff = hasTierRole(targetStaff, 'staff');
+
+    if (targetIsHeadAdmin) {
+      return { ok: false, reason: 'target_head_admin' };
+    }
+    if (approverIsAdmin) {
+      if (targetIsAdmin) return { ok: false, reason: 'admin_cannot_approve_admin' };
+      if (targetIsManager || targetIsStaff) return { ok: true };
+      return { ok: false, reason: 'admin_only_manager_staff' };
+    }
+    if (approverIsManager) {
+      if (targetIsManager || targetIsAdmin) {
+        return { ok: false, reason: 'manager_cannot_approve_manager_admin' };
+      }
+      if (targetIsStaff) return { ok: true };
+      return { ok: false, reason: 'manager_only_staff' };
+    }
+    return { ok: false, reason: 'insufficient_hierarchy' };
+  }
+
+  function hierarchyError(reason) {
+    if (reason === 'target_missing') {
+      return '❌ Cannot verify the submitter role for this queue item (member not found in server). Ask a Head Admin to review it.';
+    }
+    if (reason === 'target_head_admin') {
+      return '❌ Only Head Admins can approve items submitted by Head Admins.';
+    }
+    if (reason === 'admin_cannot_approve_admin') {
+      return '❌ Admins cannot approve their own/admin peers queue items. Only Head Admins can do that.';
+    }
+    if (reason === 'manager_cannot_approve_manager_admin') {
+      return '❌ Managers can only approve Staff queue items.';
+    }
+    if (reason === 'admin_only_manager_staff') {
+      return '❌ Admins can only approve Manager or Staff queue items.';
+    }
+    if (reason === 'manager_only_staff') {
+      return '❌ Managers can only approve Staff queue items.';
+    }
+    return '❌ You are not allowed to approve this queue item by hierarchy rules.';
+  }
+
+  async function getPendingQueueItems(viewerMember = null, guild = null) {
     const q = await pool.query(
       "SELECT * FROM punishment_queue WHERE status = 'pending' ORDER BY id ASC"
     );
     const items = [];
     for (const row of q.rows) {
       const log = await getLogForQueue(row);
-      if (log) items.push({ queue: row, log });
+      if (!log) continue;
+      if (viewerMember && guild) {
+        const auth = await evaluateQueueHierarchy(guild, viewerMember, row);
+        if (!auth.ok) continue;
+      }
+      items.push({ queue: row, log });
     }
     return items;
   }
@@ -200,9 +278,11 @@ module.exports = function punishmentCommands(ctx) {
           '❌ Managers or higher only. If you have the manager role, enable **Server Members Intent** for the bot or try again.',
       });
     }
-    const items = await getPendingQueueItems();
+    const items = await getPendingQueueItems(member, interaction.guild);
     if (items.length === 0) {
-      return interaction.editReply({ content: 'Queue is empty (no pending items).' });
+      return interaction.editReply({
+        content: 'There are no pending queue items you can approve right now.',
+      });
     }
     return renderQueuePage(interaction, items, 0);
   }
@@ -218,7 +298,6 @@ module.exports = function punishmentCommands(ctx) {
       await interaction.reply({ content: '❌ Managers only.', ephemeral: true });
       return true;
     }
-
     const parts = interaction.customId.split('|');
     if (parts.length < 3) return false;
 
@@ -227,10 +306,10 @@ module.exports = function punishmentCommands(ctx) {
     if (parts[1] === 'nav') {
       const queueId = parseInt(parts[2], 10);
       const dir = parts[3];
-      const items = await getPendingQueueItems();
+      const items = await getPendingQueueItems(member, interaction.guild);
       if (!items.length) {
         return interaction.editReply({
-          content: 'Queue is empty.',
+          content: 'There are no pending queue items you can approve.',
           embeds: [],
           components: [],
         });
@@ -245,22 +324,29 @@ module.exports = function punishmentCommands(ctx) {
 
     if (parts[1] === 'acc') {
       const queueId = parseInt(parts[2], 10);
+      const row = await getQueueRow(queueId);
+      const auth = await evaluateQueueHierarchy(interaction.guild, member, row);
+      if (!auth.ok && auth.reason !== 'no_pending') {
+        await interaction.followUp({ content: hierarchyError(auth.reason), ephemeral: true });
+        return true;
+      }
       const res = await applyAccept(queueId);
       if (!res.ok) {
-        const items = await getPendingQueueItems();
+        const items = await getPendingQueueItems(member, interaction.guild);
         if (!items.length) {
           return interaction.editReply({
-            content: '❌ That item is no longer pending (or was already processed). Queue is empty.',
+            content:
+              '❌ That item is no longer pending (or was already processed). There are no pending queue items you can approve.',
             embeds: [],
             components: [],
           });
         }
         return renderQueuePage(interaction, items, 0);
       }
-      const items = await getPendingQueueItems();
+      const items = await getPendingQueueItems(member, interaction.guild);
       if (!items.length) {
         return interaction.editReply({
-          content: `✅ Accepted punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
+          content: `✅ Accepted punishment **log #${res.logId}** (queue **#${res.queueId}**). No more queue items are visible for your approval level.`,
           embeds: [],
           components: [],
         });
@@ -270,12 +356,19 @@ module.exports = function punishmentCommands(ctx) {
 
     if (parts[1] === 'den') {
       const queueId = parseInt(parts[2], 10);
+      const row = await getQueueRow(queueId);
+      const auth = await evaluateQueueHierarchy(interaction.guild, member, row);
+      if (!auth.ok && auth.reason !== 'no_pending') {
+        await interaction.followUp({ content: hierarchyError(auth.reason), ephemeral: true });
+        return true;
+      }
       const res = await applyDeny(queueId);
       if (!res.ok) {
-        const items = await getPendingQueueItems();
+        const items = await getPendingQueueItems(member, interaction.guild);
         if (!items.length) {
           return interaction.editReply({
-            content: '❌ That item is no longer pending. Queue is empty.',
+            content:
+              '❌ That item is no longer pending. There are no pending queue items you can approve.',
             embeds: [],
             components: [],
           });
@@ -285,10 +378,10 @@ module.exports = function punishmentCommands(ctx) {
       if (!res.log?.reversal_reminded) {
         await sendImmediateUnbanPing(interaction.client, res.log).catch(() => {});
       }
-      const items = await getPendingQueueItems();
+      const items = await getPendingQueueItems(member, interaction.guild);
       if (!items.length) {
         return interaction.editReply({
-          content: `✅ Denied punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
+          content: `✅ Denied punishment **log #${res.logId}** (queue **#${res.queueId}**). No more queue items are visible for your approval level.`,
           embeds: [],
           components: [],
         });

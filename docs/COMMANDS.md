@@ -301,6 +301,11 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 - **Description**: Manager review of pending `/log` items: **paged** embed (Previous / Next) with **Accept** / **Deny** buttons. Ephemeral to the invoker.
 - **Default permission**: Manage Roles (**Manager+**).
 - **Behavior**: **Accept** sets `punishment_logs` active and schedules `reversal_remind_at` from `cooldown_raw` if set. **Deny** voids the log. No channel ping on accept.
+- **Approval hierarchy**:
+  - **Head Admin** (`BOT_ROLE_HEAD_ADMIN_ID`): can approve everyone (including head-admin peers and self).
+  - **Admin** (`BOT_ROLE_ADMIN_ID`): can approve **Manager** and **Staff** submissions only.
+  - **Manager** (`BOT_ROLE_MANAGER_ID`): can approve **Staff** submissions only.
+  - Reviewers only **see queue items they are allowed to approve**.
 
 ### `/removepunishment`
 
@@ -526,6 +531,7 @@ Tier letter grades are defined in `VALID_TIERS` (`scripts/lib/helpers.js`): `S`,
 | `CLEAR_GLOBAL_COMMANDS` | When using `GUILD_ID`, clear global commands unless `false` |
 | `BOT_OWNER_IDS` | Comma-separated user IDs (owner-only commands) |
 | `BOT_ROLE_PM_ID`, `BOT_ROLE_STAFF_ID`, `BOT_ROLE_MANAGER_ID`, `BOT_ROLE_ADMIN_ID` | Comma-separated role snowflakes per tier (recommended) |
+| `BOT_ROLE_HEAD_ADMIN_ID` | Comma-separated role snowflakes for head-admin queue override (can approve all in `/checkqueue`) |
 | `BOT_ROLE_APPLICANT_ID` | Applicant role id(s) for `/deny` |
 | `BOT_ROLE_*_NAME` | Override role **names** when no IDs set for that tier |
 | `BOT_ROLE_BOOSTER_NAME` | Optional booster role for `/tierlist` / `/viewtier` |
