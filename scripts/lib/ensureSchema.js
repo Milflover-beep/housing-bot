@@ -78,11 +78,19 @@ async function ensureDatabaseSchema(pool) {
         details            TEXT,
         status             TEXT DEFAULT 'pending',
         punishment_log_id  INTEGER REFERENCES punishment_logs (id),
+        submitter_level    INTEGER,
+        submitter_is_head_admin BOOLEAN DEFAULT FALSE,
         created_at         TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await client.query(`
       ALTER TABLE punishment_queue ADD COLUMN IF NOT EXISTS punishment_log_id INTEGER;
+    `);
+    await client.query(`
+      ALTER TABLE punishment_queue ADD COLUMN IF NOT EXISTS submitter_level INTEGER;
+    `);
+    await client.query(`
+      ALTER TABLE punishment_queue ADD COLUMN IF NOT EXISTS submitter_is_head_admin BOOLEAN DEFAULT FALSE;
     `);
     await client.query(`
       CREATE TABLE IF NOT EXISTS pm_list (

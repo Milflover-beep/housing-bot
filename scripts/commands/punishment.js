@@ -112,30 +112,39 @@ module.exports = function punishmentCommands(ctx) {
       return { ok: true };
     }
 
-    const targetStaff = await guild.members.fetch(String(queueRow.staff_discord_id)).catch(() => null);
-    if (!targetStaff) {
-      return { ok: false, reason: 'target_missing' };
-    }
-    const targetIsHeadAdmin = memberHasAnyRoleId(targetStaff, headAdminIds);
     const approverIsAdmin = hasTierRole(approver, 'admin');
     const approverIsManager = hasTierRole(approver, 'manager');
-    const targetIsAdmin = hasTierRole(targetStaff, 'admin');
-    const targetIsManager = hasTierRole(targetStaff, 'manager');
-    const targetIsStaff = hasTierRole(targetStaff, 'staff');
+
+    let targetIsHeadAdmin = Boolean(queueRow.submitter_is_head_admin);
+    let targetLevel = Number(queueRow.submitter_level);
+    if (!Number.isFinite(targetLevel) || targetLevel < 0) targetLevel = 0;
+
+    // Backward compatibility for queue rows created before submitter snapshots were stored.
+    if (targetLevel === 0 && !targetIsHeadAdmin) {
+      const targetStaff = await guild.members.fetch(String(queueRow.staff_discord_id)).catch(() => null);
+      if (!targetStaff) {
+        return { ok: false, reason: 'target_missing' };
+      }
+      targetIsHeadAdmin = memberHasAnyRoleId(targetStaff, headAdminIds);
+      if (hasTierRole(targetStaff, 'admin')) targetLevel = 4;
+      else if (hasTierRole(targetStaff, 'manager')) targetLevel = 3;
+      else if (hasTierRole(targetStaff, 'staff')) targetLevel = 2;
+      else targetLevel = 0;
+    }
 
     if (targetIsHeadAdmin) {
       return { ok: false, reason: 'target_head_admin' };
     }
     if (approverIsAdmin) {
-      if (targetIsAdmin) return { ok: false, reason: 'admin_cannot_approve_admin' };
-      if (targetIsManager || targetIsStaff) return { ok: true };
+      if (targetLevel >= 4) return { ok: false, reason: 'admin_cannot_approve_admin' };
+      if (targetLevel === 3 || targetLevel === 2) return { ok: true };
       return { ok: false, reason: 'admin_only_manager_staff' };
     }
     if (approverIsManager) {
-      if (targetIsManager || targetIsAdmin) {
+      if (targetLevel >= 3) {
         return { ok: false, reason: 'manager_cannot_approve_manager_admin' };
       }
-      if (targetIsStaff) return { ok: true };
+      if (targetLevel === 2) return { ok: true };
       return { ok: false, reason: 'manager_only_staff' };
     }
     return { ok: false, reason: 'insufficient_hierarchy' };
@@ -163,6 +172,16 @@ module.exports = function punishmentCommands(ctx) {
     return '❌ You are not allowed to approve this queue item by hierarchy rules.';
   }
 
+  function submitterSnapshot(member) {
+    const headAdminIds = headAdminRoleIds();
+    const isHeadAdmin = memberHasAnyRoleId(member, headAdminIds);
+    let level = 0;
+    if (hasTierRole(member, 'admin')) level = 4;
+    else if (hasTierRole(member, 'manager')) level = 3;
+    else if (hasTierRole(member, 'staff')) level = 2;
+    return { level, isHeadAdmin };
+  }
+
   async function getPendingQueueItems(viewerMember = null, guild = null) {
     const q = await pool.query(
       "SELECT * FROM punishment_queue WHERE status = 'pending' ORDER BY id ASC"
@@ -184,7 +203,7 @@ module.exports = function punishmentCommands(ctx) {
     const evidenceText = formatEvidencePlainUrls(log.evidence);
     const description = `**Player:** \`${log.user_ign}\`\n**Staff:** ${log.staff_ign || '—'}\n\n**📎 Evidence**\n${evidenceText}`;
     return new EmbedBuilder()
-      .setTitle(`Manager queue — ${pageNum}/${totalPages} (queue #${queue.id} · log #${log.id})`)
+      .setTitle(`Review queue — ${pageNum}/${totalPages} (queue #${queue.id} · log #${log.id})`)
       .setColor(0x5865f2)
       .setDescription(description.slice(0, 4096))
       .addFields(
@@ -416,6 +435,7 @@ module.exports = function punishmentCommands(ctx) {
     const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
+    const snapshot = submitterSnapshot(member);
 
     try {
       const ins = await pool.query(
@@ -429,9 +449,9 @@ module.exports = function punishmentCommands(ctx) {
       const summary = (details || '').slice(0, 200);
       try {
         await pool.query(
-          `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, created_at)
-           VALUES ($1, $2, $3, 'pending', $4, NOW())`,
-          [userIgn, staffDiscordId, summary, logId]
+          `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, submitter_level, submitter_is_head_admin, created_at)
+           VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW())`,
+          [userIgn, staffDiscordId, summary, logId, snapshot.level, snapshot.isHeadAdmin]
         );
       } catch (e) {
         const code = e && e.code;
@@ -439,9 +459,9 @@ module.exports = function punishmentCommands(ctx) {
         const missingLogIdCol = code === '42703' || /punishment_log_id/i.test(msg);
         if (missingLogIdCol) {
           await pool.query(
-            `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, created_at)
-             VALUES ($1, $2, $3, 'pending', NOW())`,
-            [userIgn, staffDiscordId, summary]
+            `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, submitter_level, submitter_is_head_admin, created_at)
+             VALUES ($1, $2, $3, 'pending', $4, $5, NOW())`,
+            [userIgn, staffDiscordId, summary, snapshot.level, snapshot.isHeadAdmin]
           );
         } else {
           throw e;
@@ -450,7 +470,7 @@ module.exports = function punishmentCommands(ctx) {
 
       await interaction.editReply({
         content:
-          `✅ Logged punishment **#${logId}** for **${userIgn}** and added it to the **manager review queue**.\n` +
+          `✅ Logged punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
           `Duration set to **${cooldownRaw}** (progressive 3d -> 6d -> 12d...). Managers use **/checkqueue** (pages + Accept/Deny).`,
       });
     } catch (e) {
@@ -499,6 +519,7 @@ module.exports = function punishmentCommands(ctx) {
     const reversalAt = isPermanentBan ? null : new Date(Date.now() + cooldownMs);
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
+    const snapshot = submitterSnapshot(member);
 
     const ins = await pool.query(
       `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
@@ -509,9 +530,9 @@ module.exports = function punishmentCommands(ctx) {
     const logId = ins.rows[0].id;
     const summary = (details || '').slice(0, 200);
     await pool.query(
-      `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, created_at)
-       VALUES ($1, $2, $3, 'pending', $4, NOW())`,
-      [userIgn, staffDiscordId, summary, logId]
+      `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, submitter_level, submitter_is_head_admin, created_at)
+       VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW())`,
+      [userIgn, staffDiscordId, summary, logId, snapshot.level, snapshot.isHeadAdmin]
     );
     if (progressiveBan) {
       await pool.query(`UPDATE punishment_logs SET progressive_ban = true WHERE id = $1`, [logId]);
@@ -519,7 +540,7 @@ module.exports = function punishmentCommands(ctx) {
 
     await interaction.editReply({
       content:
-        `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to manager review queue.\n` +
+        `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to review queue.\n` +
         `${
           progressiveBan
             ? 'Auto progressive ban duration'
