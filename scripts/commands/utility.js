@@ -20,7 +20,10 @@ function loadWhoisOverrides() {
       map.set(ign, text);
     }
     return map;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `⚠️ Failed to load whois overrides from ${WHOIS_FILE_PATH}: ${err?.message || err}`
+    );
     return new Map();
   }
 }

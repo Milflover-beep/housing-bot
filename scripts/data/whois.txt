@@ -1,0 +1,20 @@
+# Format: ign|text
+# - IGN match is case-insensitive
+# - Lines starting with # are comments
+# - If an IGN is not listed, /whois returns "<ign> is mid"
+
+vverse|VVERSE is the best pvper. He Who PVPs..
+lukewarmsoup|lukewarmsoup is the best admin
+sniper_man|sniper_man is the smp king
+rosyuv|rosyuv is the viltrumite emperor
+justiceforblacks|JusticeForBlacks is most certainly not mid 
+ecuadors|Ecuadors is the one who knocks and coded this bot
+iamhumi|iamhumi is dewier's father
+wefle|Welfe is... obviously the housing goat
+ywara|ywara is an unc
+nqqx|nqqxnqqxnqqxnqqxnqqxnqqxnqqxnqqx
+peelzs|peelzs is a banana of course
+dewier|dewier is the #2 bedwars player
+alinaur|alinaur is a swedish meatball
+thornsk1n|thornsk1n is a sumo player at heart
+xetya|xetya is in a classroom of the elite
