@@ -3,7 +3,7 @@ const { syncTierListChannel } = require('../lib/tierListChannelSync');
 
 const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
-const RANK_LABEL = { prime: 'Prime', elite: 'Elite', apex: 'Apex' };
+const RANK_LABEL = { prime: 'Prime', elite: 'Elite', apex: 'Apex', pm: 'PM' };
 const DEFAULT_DENY_ACCEPT_RESULTS_CHANNEL_ID = '1439866722038452314';
 
 module.exports = function applicationsCommands(ctx) {
@@ -16,6 +16,7 @@ module.exports = function applicationsCommands(ctx) {
     applicantRoleIds,
     parseRoleIdList,
     resolveGuildMember,
+    parseCooldownToMs,
     VALID_TIERS,
   } = ctx;
 
@@ -120,7 +121,21 @@ module.exports = function applicationsCommands(ctx) {
     const typeStr = interaction.options.getString('type');
     const letter = RANK_LETTER[typeStr];
     const weeks = WEEKS[typeStr];
-    const cooldownUntil = new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000);
+    const customCooldownRaw = interaction.options.getString('cooldown');
+    const customCooldownMs = parseCooldownToMs(customCooldownRaw);
+    if (customCooldownRaw && customCooldownMs === undefined) {
+      return interaction.editReply({
+        content:
+          '❌ Invalid cooldown format. Use one number and one unit: `d` days, `h` hours, `m` minutes (e.g. `3d`, `12h`, `30m`).',
+      });
+    }
+    const cooldownMs =
+      customCooldownMs != null ? customCooldownMs : weeks * 7 * 24 * 60 * 60 * 1000;
+    const cooldownUntil = new Date(Date.now() + cooldownMs);
+    const cooldownSummary =
+      customCooldownMs != null
+        ? `custom duration **${customCooldownRaw.trim()}**`
+        : `${weeks} week${weeks > 1 ? 's' : ''}`;
 
     await pool.query(
       `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
@@ -143,9 +158,7 @@ module.exports = function applicationsCommands(ctx) {
     await interaction.editReply({
       content:
         `✅ Denied **${ign}** (<@${discordUser.id}>) for **${typeStr}** tryout.\n` +
-        `Cooldown until <t:${Math.floor(cooldownUntil.getTime() / 1000)}:F> (${weeks} week${
-          weeks > 1 ? 's' : ''
-        }).`,
+        `Cooldown until <t:${Math.floor(cooldownUntil.getTime() / 1000)}:F> (${cooldownSummary}).`,
     });
 
     await sendApplicationResultLog(interaction, {
@@ -311,6 +324,12 @@ module.exports = function applicationsCommands(ctx) {
               { name: 'Elite (2 weeks)', value: 'elite' },
               { name: 'Apex (3 weeks)', value: 'apex' }
             )
+        )
+        .addStringOption((o) =>
+          o
+            .setName('cooldown')
+            .setDescription('Optional override, e.g. 3d, 12h, 30m')
+            .setRequired(false)
         ),
       new SlashCommandBuilder()
         .setName('abort')
@@ -324,7 +343,8 @@ module.exports = function applicationsCommands(ctx) {
             .addChoices(
               { name: 'Prime', value: 'prime' },
               { name: 'Elite', value: 'elite' },
-              { name: 'Apex', value: 'apex' }
+              { name: 'Apex', value: 'apex' },
+              { name: 'PM', value: 'pm' }
             )
         )
         .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
