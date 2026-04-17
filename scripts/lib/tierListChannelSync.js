@@ -29,34 +29,22 @@ function selectCurrentTierRowsSql() {
   return sqlTierResultsPublicListRowsForLadder();
 }
 
-/** Map letter grade to S/A/B/C/D bucket for public list layout. */
-function tierToBucket(tier) {
-  const t = String(tier || '')
-    .trim()
-    .toUpperCase();
-  if (t === 'S') return 'S';
-  if (['A+', 'A', 'A-', 'HB'].includes(t)) return 'A';
-  if (['B+', 'B', 'B-'].includes(t)) return 'B';
-  if (['C+', 'C', 'C-'].includes(t)) return 'C';
-  if (['D', 'N/A', 'F'].includes(t)) return 'D';
-  return null;
-}
-
 const BUCKET_EMOJI = {
   S: '🟥',
+  'A+': '🟧',
   A: '🟧',
+  'A-': '🟧',
+  'B+': '🟨',
   B: '🟨',
+  'B-': '🟨',
+  'C+': '🟩',
   C: '🟩',
+  'C-': '🟩',
   D: '⬛',
+  'N/A': '⬛',
 };
 
-const BUCKET_SUBTIERS = {
-  S: ['S'],
-  A: ['A+', 'A', 'A-'],
-  B: ['B+', 'B', 'B-'],
-  C: ['C+', 'C', 'C-'],
-  D: ['D', 'N/A'],
-};
+const TIER_BUCKET_ORDER = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'N/A'];
 
 function displayTierLabel(rawTier) {
   const t = String(rawTier || '')
@@ -66,37 +54,15 @@ function displayTierLabel(rawTier) {
   return t;
 }
 
-function wrapNames(names, maxChars = 72) {
-  const chunks = [];
-  let current = '';
-  for (const name of names) {
-    const part = String(name || '').trim();
-    if (!part) continue;
-    if (!current) {
-      current = part;
-      continue;
-    }
-    if ((current + ', ' + part).length > maxChars) {
-      chunks.push(current);
-      current = part;
-    } else {
-      current += `, ${part}`;
-    }
-  }
-  if (current) chunks.push(current);
-  return chunks;
-}
-
-/** Compact markdown layout: S/A/B/C/D buckets with sub-tier rows. */
+/** Classic bucket layout: one block per exact tier label. */
 function buildTierListEmbedDescription(rows) {
-  const buckets = { S: [], A: [], B: [], C: [], D: [] };
+  const buckets = Object.fromEntries(TIER_BUCKET_ORDER.map((tier) => [tier, []]));
   for (const r of rows) {
-    const b = tierToBucket(r.tier);
-    if (b && buckets[b]) buckets[b].push(r);
+    const tier = displayTierLabel(r.tier);
+    if (buckets[tier]) buckets[tier].push(r);
   }
-  const order = ['S', 'A', 'B', 'C', 'D'];
-  for (const b of order) {
-    buckets[b].sort((a, c) => {
+  for (const tier of TIER_BUCKET_ORDER) {
+    buckets[tier].sort((a, c) => {
       const tr = tierRank(a.tier) - tierRank(c.tier);
       if (tr !== 0) return tr;
       return String(a.ign).localeCompare(String(c.ign));
@@ -105,28 +71,14 @@ function buildTierListEmbedDescription(rows) {
 
   const lines = [];
   let hasAny = false;
-  for (const b of order) {
-    const list = buckets[b];
+  for (const tier of TIER_BUCKET_ORDER) {
+    const list = buckets[tier];
     if (!list.length) continue;
     hasAny = true;
-    lines.push(`${BUCKET_EMOJI[b]} **${b}** (${list.length})`);
-    const tierMap = new Map();
-    for (const row of list) {
-      const label = displayTierLabel(row.tier);
-      if (!tierMap.has(label)) tierMap.set(label, []);
-      tierMap.get(label).push(row.ign);
-    }
-    const subtiers = BUCKET_SUBTIERS[b] || [];
-    for (const label of subtiers) {
-      const names = tierMap.get(label);
-      if (!names?.length) continue;
-      const wrapped = wrapNames(names);
-      if (!wrapped.length) continue;
-      lines.push(`• \`${label}\` (${names.length}) — ${wrapped[0]}`);
-      for (let i = 1; i < wrapped.length; i++) {
-        lines.push(`  ${wrapped[i]}`);
-      }
-    }
+    lines.push(`${BUCKET_EMOJI[tier] || '⬜'} **${tier}** (${list.length})`);
+    lines.push('```');
+    lines.push(...list.map((r) => `- ${r.ign}`));
+    lines.push('```');
     lines.push('');
   }
   if (!hasAny) {
