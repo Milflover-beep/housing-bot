@@ -918,13 +918,12 @@ module.exports = function coreCommands(ctx) {
       ]);
     }
 
-    const rn = ctx.getRoleNames();
     const embed = new EmbedBuilder()
       .setTitle('Commands for your role')
       .setColor(0x5865f2)
       .setDescription(lines.join('\n\n'))
       .setFooter({
-        text: `Level ${lv}/4 · Access roles: ${rn.pm} · ${rn.staff} · ${rn.manager} · ${rn.admin}`,
+        text: `Clearance ${lv}/4`,
       });
 
     await interaction.editReply({ embeds: [embed] });
