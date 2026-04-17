@@ -66,7 +66,28 @@ function displayTierLabel(rawTier) {
   return t;
 }
 
-/** Markdown: S/A/B/C/D buckets in plain code fences (ladder name is embed title). */
+function wrapNames(names, maxChars = 72) {
+  const chunks = [];
+  let current = '';
+  for (const name of names) {
+    const part = String(name || '').trim();
+    if (!part) continue;
+    if (!current) {
+      current = part;
+      continue;
+    }
+    if ((current + ', ' + part).length > maxChars) {
+      chunks.push(current);
+      current = part;
+    } else {
+      current += `, ${part}`;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+/** Compact markdown layout: S/A/B/C/D buckets with sub-tier rows. */
 function buildTierListEmbedDescription(rows) {
   const buckets = { S: [], A: [], B: [], C: [], D: [] };
   for (const r of rows) {
@@ -99,7 +120,12 @@ function buildTierListEmbedDescription(rows) {
     for (const label of subtiers) {
       const names = tierMap.get(label);
       if (!names?.length) continue;
-      lines.push(`\`${label}\` ${names.join(', ')}`);
+      const wrapped = wrapNames(names);
+      if (!wrapped.length) continue;
+      lines.push(`• \`${label}\` (${names.length}) — ${wrapped[0]}`);
+      for (let i = 1; i < wrapped.length; i++) {
+        lines.push(`  ${wrapped[i]}`);
+      }
     }
     lines.push('');
   }
