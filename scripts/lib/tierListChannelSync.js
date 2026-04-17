@@ -50,6 +50,22 @@ const BUCKET_EMOJI = {
   D: '⬛',
 };
 
+const BUCKET_SUBTIERS = {
+  S: ['S'],
+  A: ['A+', 'A', 'A-'],
+  B: ['B+', 'B', 'B-'],
+  C: ['C+', 'C', 'C-'],
+  D: ['D', 'N/A'],
+};
+
+function displayTierLabel(rawTier) {
+  const t = String(rawTier || '')
+    .trim()
+    .toUpperCase();
+  if (t === 'HB') return 'B-';
+  return t;
+}
+
 /** Markdown: S/A/B/C/D buckets in plain code fences (ladder name is embed title). */
 function buildTierListEmbedDescription(rows) {
   const buckets = { S: [], A: [], B: [], C: [], D: [] };
@@ -73,9 +89,18 @@ function buildTierListEmbedDescription(rows) {
     if (!list.length) continue;
     hasAny = true;
     lines.push(`${BUCKET_EMOJI[b]} **${b}** (${list.length})`);
-    lines.push('```');
-    lines.push(...list.map((r) => `- ${r.ign}`));
-    lines.push('```');
+    const tierMap = new Map();
+    for (const row of list) {
+      const label = displayTierLabel(row.tier);
+      if (!tierMap.has(label)) tierMap.set(label, []);
+      tierMap.get(label).push(row.ign);
+    }
+    const subtiers = BUCKET_SUBTIERS[b] || [];
+    for (const label of subtiers) {
+      const names = tierMap.get(label);
+      if (!names?.length) continue;
+      lines.push(`\`${label}\` ${names.join(', ')}`);
+    }
     lines.push('');
   }
   if (!hasAny) {
