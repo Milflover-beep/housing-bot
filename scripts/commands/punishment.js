@@ -639,6 +639,11 @@ module.exports = function punishmentCommands(ctx) {
       `SELECT id, user_ign, punishment_details, cooldown_raw, reversal_remind_at, created_at
        FROM punishment_logs
        WHERE status = 'active' AND punishment_status = 'active'
+         AND (
+           COALESCE(TRIM(cooldown_raw), '') = '-1'
+           OR reversal_remind_at IS NULL
+           OR reversal_remind_at > NOW()
+         )
        ORDER BY created_at DESC
        LIMIT 200`
     );
