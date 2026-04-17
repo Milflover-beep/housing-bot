@@ -824,6 +824,7 @@ module.exports = function coreCommands(ctx) {
         '`/whitelist`',
         '`/totalhistory`',
         '`/boosterpuncheck`',
+        '`/activepunishments`',
       ]);
     }
     if (lv >= 3) {
