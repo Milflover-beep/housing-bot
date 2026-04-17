@@ -64,9 +64,13 @@ module.exports = function blacklistCommands(ctx) {
         const expiresAt = row.blacklist_expires ? new Date(row.blacklist_expires) : null;
         const isActive = !expiresAt || expiresAt.getTime() > now;
         const status = isActive ? 'active' : 'expired';
-        return `**#${row.id}** — ${row.reason} (${row.time_length || '?'}) — **${status}**${
-          expiresAt ? ` — expires ${expiresAt.toLocaleString()}` : ' — permanent'
-        }`;
+        let timingText = ' — permanent';
+        if (expiresAt) {
+          timingText = isActive
+            ? ` — expires ${expiresAt.toLocaleString()}`
+            : ` — expired ${expiresAt.toLocaleString()}`;
+        }
+        return `**#${row.id}** — ${row.reason} (${row.time_length || '?'}) — **${status}**${timingText}`;
       })
       .join('\n');
     const embed = new EmbedBuilder()

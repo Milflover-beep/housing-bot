@@ -210,7 +210,10 @@ module.exports = function coreCommands(ctx) {
           [ign]
         ),
         pool.query(
-          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
+          `SELECT * FROM admin_blacklists
+           WHERE LOWER(ign) = $1
+             AND is_pardoned = false
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
           [ign]
         ),
         pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
@@ -228,7 +231,10 @@ module.exports = function coreCommands(ctx) {
           [ign]
         ),
         pool.query(
-          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
+          `SELECT * FROM admin_blacklists
+           WHERE LOWER(ign) = $1
+             AND is_pardoned = false
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
           [ign]
         ),
         pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
@@ -267,7 +273,8 @@ module.exports = function coreCommands(ctx) {
         pool.query(
           `SELECT * FROM admin_blacklists
            WHERE LOWER(ign) = ANY($1::text[])
-             AND is_pardoned = false`,
+             AND is_pardoned = false
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
           [related]
         ),
       ]);
