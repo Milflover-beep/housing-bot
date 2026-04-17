@@ -5,8 +5,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleAddalt(interaction) {
     await defer(interaction, true);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const orig = normalizeIgn(interaction.options.getString('original-ign'));
     const alt = normalizeIgn(interaction.options.getString('alt-ign'));
@@ -19,8 +19,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleViewalts(interaction) {
     await defer(interaction, true);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const r = await pool.query(
@@ -39,8 +39,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleDeletealt(interaction) {
     await defer(interaction, true);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const id = interaction.options.getInteger('id', true);
     const q = await pool.query(
@@ -58,8 +58,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleClearalt(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const orig = normalizeIgn(interaction.options.getString('original-ign'));
     const q = await pool.query('DELETE FROM alts WHERE LOWER(original_ign) = $1 RETURNING id', [orig]);
@@ -70,8 +70,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleEditalt(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const id = interaction.options.getInteger('id');
     const newOrig = interaction.options.getString('new-original-ign');
@@ -97,8 +97,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleWhitelist(interaction) {
     await defer(interaction, true);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const ignLower = normalizeIgn(interaction.options.getString('ign'));
     const on = interaction.options.getBoolean('whitelisted');

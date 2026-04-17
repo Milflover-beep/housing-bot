@@ -3,24 +3,10 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = function reportsCommands(ctx) {
   const { pool, requireLevel, defer, normalizeIgn } = ctx;
 
-  async function handleReport(interaction) {
-    await defer(interaction, true);
-    const ign = normalizeIgn(interaction.options.getString('ign'));
-    const reason = interaction.options.getString('reason');
-    await pool.query(
-      `INSERT INTO reports (ign, reason, punishment_issued, discord_user_id, date_issued)
-       VALUES ($1, $2, false, $3, NOW())`,
-      [ign, reason, interaction.user.id]
-    );
-    await interaction.editReply({
-      content: `✅ Report submitted for **${ign}**. Staff will review it.`,
-    });
-  }
-
   async function handleBancheck(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const ign = normalizeIgn(interaction.options.getString('ign'));
     const r = await pool.query(
@@ -66,11 +52,6 @@ module.exports = function reportsCommands(ctx) {
 
   const commands = [
     new SlashCommandBuilder()
-      .setName('report')
-      .setDescription('Submit a report against a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .addStringOption((o) => o.setName('reason').setDescription('Reason').setRequired(true)),
-    new SlashCommandBuilder()
       .setName('bancheck')
       .setDescription('View reports for a player')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
@@ -87,7 +68,6 @@ module.exports = function reportsCommands(ctx) {
   return {
     commands,
     handlers: {
-      report: handleReport,
       bancheck: handleBancheck,
       acceptreport: handleAcceptreport,
     },

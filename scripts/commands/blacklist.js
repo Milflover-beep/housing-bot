@@ -58,13 +58,16 @@ module.exports = function blacklistCommands(ctx) {
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No blacklist rows for **${ign}**.` });
     }
+    const now = Date.now();
     const desc = r.rows
-      .map(
-        (row) =>
-          `**#${row.id}** — ${row.reason} (${row.time_length || '?'})${
-            row.blacklist_expires ? ` — expires ${new Date(row.blacklist_expires).toLocaleString()}` : ''
-          }`
-      )
+      .map((row) => {
+        const expiresAt = row.blacklist_expires ? new Date(row.blacklist_expires) : null;
+        const isActive = !expiresAt || expiresAt.getTime() > now;
+        const status = isActive ? 'active' : 'expired';
+        return `**#${row.id}** — ${row.reason} (${row.time_length || '?'}) — **${status}**${
+          expiresAt ? ` — expires ${expiresAt.toLocaleString()}` : ' — permanent'
+        }`;
+      })
       .join('\n');
     const embed = new EmbedBuilder()
       .setTitle(`Blacklist history: ${ign}`)
@@ -76,8 +79,8 @@ module.exports = function blacklistCommands(ctx) {
 
   async function handleAdminblacklist(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 3)) {
-      return interaction.editReply({ content: '❌ Managers or higher only.' });
+    if (!requireLevel(interaction.member, 4)) {
+      return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
     const ignOpt = interaction.options.getString('ign');
     const q = ignOpt

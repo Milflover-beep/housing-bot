@@ -57,10 +57,7 @@ module.exports = function coreCommands(ctx) {
   }
 
   function isBlacklisted(rows) {
-    return rows.some((row) => {
-      if (!row.blacklist_expires) return true;
-      return new Date(row.blacklist_expires) > new Date();
-    });
+    return rows.length > 0;
   }
 
   function parseFinalScoreForDebug(str) {
@@ -206,7 +203,12 @@ module.exports = function coreCommands(ctx) {
 
     if (isPmCheck) {
       [blacklistRows, adminBlacklistRows, altRows] = await Promise.all([
-        pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
+        pool.query(
+          `SELECT * FROM blacklists
+           WHERE LOWER(ign) = $1
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+          [ign]
+        ),
         pool.query(
           'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
           [ign]
@@ -219,7 +221,12 @@ module.exports = function coreCommands(ctx) {
       hypixelResult = { ok: true, pmSkip: true };
     } else {
       [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
-        pool.query('SELECT * FROM blacklists WHERE LOWER(ign) = $1', [ign]),
+        pool.query(
+          `SELECT * FROM blacklists
+           WHERE LOWER(ign) = $1
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+          [ign]
+        ),
         pool.query(
           'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 AND (is_pardoned = false)',
           [ign]
@@ -236,6 +243,33 @@ module.exports = function coreCommands(ctx) {
           [ign]
         ),
         fetchNetworkLevelForCheck(hypixelKey, ign),
+      ]);
+    }
+
+    const linkedAltIgns = new Set();
+    for (const row of altRows.rows) {
+      const orig = normalizeIgn(row.original_ign);
+      const alt = normalizeIgn(row.alt_ign);
+      if (orig && orig !== ign) linkedAltIgns.add(orig);
+      if (alt && alt !== ign) linkedAltIgns.add(alt);
+    }
+    let altBlacklistRows = { rows: [] };
+    let altAdminBlacklistRows = { rows: [] };
+    if (linkedAltIgns.size > 0) {
+      const related = Array.from(linkedAltIgns);
+      [altBlacklistRows, altAdminBlacklistRows] = await Promise.all([
+        pool.query(
+          `SELECT * FROM blacklists
+           WHERE LOWER(ign) = ANY($1::text[])
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+          [related]
+        ),
+        pool.query(
+          `SELECT * FROM admin_blacklists
+           WHERE LOWER(ign) = ANY($1::text[])
+             AND is_pardoned = false`,
+          [related]
+        ),
       ]);
     }
 
@@ -300,6 +334,13 @@ module.exports = function coreCommands(ctx) {
       eligible = false;
       const abl = adminBlacklistRows.rows[0];
       issues.push(`🚫 **Admin Blacklisted** — ${abl.reason}`);
+    }
+
+    if (altBlacklistRows.rows.length > 0 || altAdminBlacklistRows.rows.length > 0) {
+      eligible = false;
+      issues.push(
+        '🚫 **Linked-account blacklist match** — this player is linked to at least one blacklisted account.'
+      );
     }
 
     if (!isPmCheck && denialRows.rows.length > 0) {
@@ -784,7 +825,7 @@ module.exports = function coreCommands(ctx) {
   }
 
   async function handleCheckcommands(interaction) {
-    await defer(interaction, false);
+    await defer(interaction, true);
     const lv = getMemberLevel(interaction.member);
     const lines = [];
     const add = (tier, cmds) => {
@@ -812,18 +853,9 @@ module.exports = function coreCommands(ctx) {
         '`/score`',
         '`/log` (→ manager queue)',
         '`/history`',
-        '`/report`',
         '`/staffstats`',
-        '`/viewalts`',
         '`/viewblacklist`',
-        '`/bancheck`',
-        '`/addalt`',
-        '`/editalt`',
-        '`/deletealt`',
-        '`/clearalt`',
-        '`/whitelist`',
         '`/totalhistory`',
-        '`/boosterpuncheck`',
         '`/activepunishments`',
       ]);
     }
@@ -840,12 +872,17 @@ module.exports = function coreCommands(ctx) {
         '`/getproof`',
         '`/removepunishment`',
         '`/blacklist`',
-        '`/adminblacklist`',
-        '`/update` (IGN rename)',
+        '`/bancheck`',
+        '`/viewalts`',
         '`/acceptreport`',
         '`/clearcooldown`',
         '`/addpm`',
         '`/editpm`',
+        '`/addalt`',
+        '`/editalt`',
+        '`/deletealt`',
+        '`/clearalt`',
+        '`/whitelist`',
         '`/voidscore`',
         '`/publictierlistupdate`',
       ]);
@@ -858,6 +895,8 @@ module.exports = function coreCommands(ctx) {
         '`/deletepm`',
         '`/edituuid`',
         '`/removeuuid`',
+        '`/adminblacklist`',
+        '`/update` (IGN rename)',
         '`/roleblacklist`',
         '`/viewroleblacklist`',
         '`/updatescore`',

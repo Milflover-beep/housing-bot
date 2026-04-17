@@ -245,6 +245,8 @@ module.exports = function punishmentCommands(ctx) {
 
     if (parts[1] === 'acc') {
       const queueId = parseInt(parts[2], 10);
+      const itemsBefore = await getPendingQueueItems();
+      const idxBefore = Math.max(0, itemsBefore.findIndex((x) => x.queue.id === queueId));
       const res = await applyAccept(queueId);
       if (!res.ok) {
         const items = await getPendingQueueItems();
@@ -255,7 +257,7 @@ module.exports = function punishmentCommands(ctx) {
             components: [],
           });
         }
-        return renderQueuePage(interaction, items, 0);
+        return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
       }
       const items = await getPendingQueueItems();
       if (!items.length) {
@@ -265,11 +267,13 @@ module.exports = function punishmentCommands(ctx) {
           components: [],
         });
       }
-      return renderQueuePage(interaction, items, 0);
+      return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
     }
 
     if (parts[1] === 'den') {
       const queueId = parseInt(parts[2], 10);
+      const itemsBefore = await getPendingQueueItems();
+      const idxBefore = Math.max(0, itemsBefore.findIndex((x) => x.queue.id === queueId));
       const res = await applyDeny(queueId);
       if (!res.ok) {
         const items = await getPendingQueueItems();
@@ -280,7 +284,7 @@ module.exports = function punishmentCommands(ctx) {
             components: [],
           });
         }
-        return renderQueuePage(interaction, items, 0);
+        return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
       }
       if (!res.log?.reversal_reminded) {
         await sendImmediateUnbanPing(interaction.client, res.log).catch(() => {});
@@ -293,7 +297,7 @@ module.exports = function punishmentCommands(ctx) {
           components: [],
         });
       }
-      return renderQueuePage(interaction, items, 0);
+      return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
     }
 
     return false;
@@ -607,29 +611,6 @@ module.exports = function punishmentCommands(ctx) {
     }
   }
 
-  async function handleBoosterpuncheck(interaction) {
-    await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
-    }
-    const r = await pool.query(
-      `SELECT * FROM punishment_logs
-       WHERE status = 'active' AND punishment_status = 'active'
-       ORDER BY created_at DESC LIMIT 25`
-    );
-    if (r.rows.length === 0) {
-      return interaction.editReply({
-        content: 'No finalized active punishments (manager-approved). Pending items are in `/checkqueue`.',
-      });
-    }
-    const desc = r.rows
-      .map((row) => `**${row.user_ign}** (#${row.id}) — ${(row.punishment_details || '').slice(0, 60)}`)
-      .join('\n');
-    await interaction.editReply({
-      embeds: [new EmbedBuilder().setTitle('Active punishments').setDescription(desc.slice(0, 3900))],
-    });
-  }
-
   async function handleActivepunishments(interaction) {
     await defer(interaction, false);
     if (!requireLevel(interaction.member, 2)) {
@@ -724,9 +705,6 @@ module.exports = function punishmentCommands(ctx) {
       .setName('totalhistory')
       .setDescription('View all punishments by status (Staff only)'),
     new SlashCommandBuilder()
-      .setName('boosterpuncheck')
-      .setDescription('View active (manager-approved) punishments'),
-    new SlashCommandBuilder()
       .setName('activepunishments')
       .setDescription('List active punishments with IDs'),
     new SlashCommandBuilder()
@@ -753,7 +731,6 @@ module.exports = function punishmentCommands(ctx) {
       history: handleHistory,
       getproof: handleGetproof,
       totalhistory: handleTotalhistory,
-      boosterpuncheck: handleBoosterpuncheck,
       activepunishments: handleActivepunishments,
       checkqueue: handleCheckqueue,
       removepunishment: handleRemovepunishment,

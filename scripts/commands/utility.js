@@ -33,8 +33,8 @@ module.exports = function utilityCommands(ctx) {
 
   async function handleUpdate(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 3)) {
-      return interaction.editReply({ content: '❌ Managers or higher only.' });
+    if (!requireLevel(interaction.member, 4)) {
+      return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
     const oldIgn = normalizeIgn(interaction.options.getString('old-ign'));
     const newIgn = normalizeIgn(interaction.options.getString('new-ign'));
