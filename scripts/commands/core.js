@@ -848,7 +848,7 @@ module.exports = function coreCommands(ctx) {
     add('Everyone', everyone);
 
     if (lv >= 1 || ctx.hasBoosterOrAbove(interaction.member)) {
-      add('Booster+ / PM+', ['`/tierlist` — tier list', '`/viewtier` — view a player tier']);
+      add('Booster+', ['`/tierlist` — tier list', '`/viewtier` — view a player tier']);
     }
     if (lv >= 1) {
       add('PM+', ['`/pmstats`', '`/check`']);
