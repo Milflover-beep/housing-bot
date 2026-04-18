@@ -202,6 +202,8 @@ CREATE TABLE IF NOT EXISTS punishment_queue (
   details            TEXT,
   status             TEXT DEFAULT 'pending',
   punishment_log_id  INTEGER REFERENCES punishment_logs (id),
+  submitter_level    INTEGER,
+  submitter_is_head_admin BOOLEAN DEFAULT FALSE,
   created_at         TIMESTAMPTZ DEFAULT NOW()
 );
 

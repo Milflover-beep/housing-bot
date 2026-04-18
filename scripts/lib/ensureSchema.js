@@ -85,6 +85,12 @@ async function ensureDatabaseSchema(pool) {
       ALTER TABLE punishment_queue ADD COLUMN IF NOT EXISTS punishment_log_id INTEGER;
     `);
     await client.query(`
+      ALTER TABLE punishment_queue ADD COLUMN IF NOT EXISTS submitter_level INTEGER;
+    `);
+    await client.query(`
+      ALTER TABLE punishment_queue ADD COLUMN IF NOT EXISTS submitter_is_head_admin BOOLEAN DEFAULT FALSE;
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS pm_list (
         id             SERIAL PRIMARY KEY,
         ign            TEXT,

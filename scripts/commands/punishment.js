@@ -19,7 +19,12 @@ module.exports = function punishmentCommands(ctx) {
     resolveGuildMember,
     parseCooldownToMs,
     formatEvidencePlainUrls,
+    getMemberLevel,
+    hasRoleId,
+    parseRoleIdList,
   } = ctx;
+
+  const HEAD_ADMIN_ROLE_IDS = parseRoleIdList('BOT_ROLE_HEAD_ADMIN_ID');
 
   function formatRemaining(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return 'expired';
@@ -91,14 +96,71 @@ module.exports = function punishmentCommands(ctx) {
     return l.rows[0] || null;
   }
 
-  async function getPendingQueueItems() {
+  function isHeadAdmin(member) {
+    return HEAD_ADMIN_ROLE_IDS.length > 0 && HEAD_ADMIN_ROLE_IDS.some((id) => hasRoleId(member, id));
+  }
+
+  function canReviewerHandleSubmitter(reviewer, submitter) {
+    if (reviewer.isHeadAdmin) return true;
+    if (reviewer.level >= 4) {
+      // Admins can handle admins/managers/staff, but not head-admin logs.
+      return !submitter.isHeadAdmin && submitter.level >= 2 && submitter.level <= 4;
+    }
+    if (reviewer.level >= 3) {
+      // Managers can handle staff only.
+      return !submitter.isHeadAdmin && submitter.level === 2;
+    }
+    return false;
+  }
+
+  async function resolveQueueSubmitterHierarchy(guild, queueRow) {
+    const hasSnapshotLevel =
+      queueRow.submitter_level !== null &&
+      queueRow.submitter_level !== undefined &&
+      Number.isFinite(Number(queueRow.submitter_level));
+    const hasSnapshotHeadAdmin =
+      queueRow.submitter_is_head_admin !== null &&
+      queueRow.submitter_is_head_admin !== undefined;
+    if (hasSnapshotLevel || hasSnapshotHeadAdmin) {
+      return {
+        level: hasSnapshotLevel ? Number(queueRow.submitter_level) : 2,
+        isHeadAdmin: Boolean(queueRow.submitter_is_head_admin),
+      };
+    }
+    if (!guild || !queueRow.staff_discord_id) {
+      return { level: 2, isHeadAdmin: false };
+    }
+    try {
+      const submitterMember = await guild.members.fetch(queueRow.staff_discord_id);
+      return {
+        level: getMemberLevel(submitterMember),
+        isHeadAdmin: isHeadAdmin(submitterMember),
+      };
+    } catch {
+      return { level: 2, isHeadAdmin: false };
+    }
+  }
+
+  async function canReviewQueueRow(guild, reviewerMember, queueRow) {
+    const reviewer = { level: getMemberLevel(reviewerMember), isHeadAdmin: isHeadAdmin(reviewerMember) };
+    const submitter = await resolveQueueSubmitterHierarchy(guild, queueRow);
+    return canReviewerHandleSubmitter(reviewer, submitter);
+  }
+
+  async function getPendingQueueItems(guild, reviewerMember) {
     const q = await pool.query(
       "SELECT * FROM punishment_queue WHERE status = 'pending' ORDER BY id ASC"
     );
+    const reviewer = {
+      level: getMemberLevel(reviewerMember),
+      isHeadAdmin: isHeadAdmin(reviewerMember),
+    };
     const items = [];
     for (const row of q.rows) {
       const log = await getLogForQueue(row);
       if (!log) continue;
+      const submitter = await resolveQueueSubmitterHierarchy(guild, row);
+      if (!canReviewerHandleSubmitter(reviewer, submitter)) continue;
       items.push({ queue: row, log });
     }
     return items;
@@ -108,7 +170,7 @@ module.exports = function punishmentCommands(ctx) {
     const evidenceText = formatEvidencePlainUrls(log.evidence);
     const description = `**Player:** \`${log.user_ign}\`\n**Staff:** ${log.staff_ign || '—'}\n\n**📎 Evidence**\n${evidenceText}`;
     return new EmbedBuilder()
-      .setTitle(`Manager queue — ${pageNum}/${totalPages} (queue #${queue.id} · log #${log.id})`)
+      .setTitle(`Review queue — ${pageNum}/${totalPages} (queue #${queue.id} · log #${log.id})`)
       .setColor(0x5865f2)
       .setDescription(description.slice(0, 4096))
       .addFields(
@@ -202,9 +264,11 @@ module.exports = function punishmentCommands(ctx) {
           '❌ Managers or higher only. If you have the manager role, enable **Server Members Intent** for the bot or try again.',
       });
     }
-    const items = await getPendingQueueItems();
+    const items = await getPendingQueueItems(interaction.guild, member);
     if (items.length === 0) {
-      return interaction.editReply({ content: 'Queue is empty (no pending items).' });
+      return interaction.editReply({
+        content: 'Queue is empty (no pending items you can approve at your hierarchy level).',
+      });
     }
     return renderQueuePage(interaction, items, 0);
   }
@@ -228,10 +292,10 @@ module.exports = function punishmentCommands(ctx) {
     if (parts[1] === 'nav') {
       const queueId = parseInt(parts[2], 10);
       const dir = parts[3];
-      const items = await getPendingQueueItems();
+      const items = await getPendingQueueItems(interaction.guild, member);
       if (!items.length) {
         return interaction.editReply({
-          content: 'Queue is empty.',
+          content: 'Queue is empty (or no visible items at your hierarchy level).',
           embeds: [],
           components: [],
         });
@@ -246,11 +310,23 @@ module.exports = function punishmentCommands(ctx) {
 
     if (parts[1] === 'acc') {
       const queueId = parseInt(parts[2], 10);
-      const itemsBefore = await getPendingQueueItems();
+      const row = await getQueueRow(queueId);
+      if (!row || !(await canReviewQueueRow(interaction.guild, member, row))) {
+        const visible = await getPendingQueueItems(interaction.guild, member);
+        if (!visible.length) {
+          return interaction.editReply({
+            content: '❌ You cannot approve that item at your hierarchy level. No visible queue items remain.',
+            embeds: [],
+            components: [],
+          });
+        }
+        return renderQueuePage(interaction, visible, 0);
+      }
+      const itemsBefore = await getPendingQueueItems(interaction.guild, member);
       const idxBefore = Math.max(0, itemsBefore.findIndex((x) => x.queue.id === queueId));
       const res = await applyAccept(queueId);
       if (!res.ok) {
-        const items = await getPendingQueueItems();
+        const items = await getPendingQueueItems(interaction.guild, member);
         if (!items.length) {
           return interaction.editReply({
             content: '❌ That item is no longer pending (or was already processed). Queue is empty.',
@@ -260,7 +336,7 @@ module.exports = function punishmentCommands(ctx) {
         }
         return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
       }
-      const items = await getPendingQueueItems();
+      const items = await getPendingQueueItems(interaction.guild, member);
       if (!items.length) {
         return interaction.editReply({
           content: `✅ Accepted punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
@@ -273,11 +349,23 @@ module.exports = function punishmentCommands(ctx) {
 
     if (parts[1] === 'den') {
       const queueId = parseInt(parts[2], 10);
-      const itemsBefore = await getPendingQueueItems();
+      const row = await getQueueRow(queueId);
+      if (!row || !(await canReviewQueueRow(interaction.guild, member, row))) {
+        const visible = await getPendingQueueItems(interaction.guild, member);
+        if (!visible.length) {
+          return interaction.editReply({
+            content: '❌ You cannot deny that item at your hierarchy level. No visible queue items remain.',
+            embeds: [],
+            components: [],
+          });
+        }
+        return renderQueuePage(interaction, visible, 0);
+      }
+      const itemsBefore = await getPendingQueueItems(interaction.guild, member);
       const idxBefore = Math.max(0, itemsBefore.findIndex((x) => x.queue.id === queueId));
       const res = await applyDeny(queueId);
       if (!res.ok) {
-        const items = await getPendingQueueItems();
+        const items = await getPendingQueueItems(interaction.guild, member);
         if (!items.length) {
           return interaction.editReply({
             content: '❌ That item is no longer pending. Queue is empty.',
@@ -290,7 +378,7 @@ module.exports = function punishmentCommands(ctx) {
       if (!res.log?.reversal_reminded) {
         await sendImmediateUnbanPing(interaction.client, res.log).catch(() => {});
       }
-      const items = await getPendingQueueItems();
+      const items = await getPendingQueueItems(interaction.guild, member);
       if (!items.length) {
         return interaction.editReply({
           content: `✅ Denied punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
@@ -329,6 +417,8 @@ module.exports = function punishmentCommands(ctx) {
     const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
+    const submitterLevel = getMemberLevel(member);
+    const submitterIsHeadAdmin = isHeadAdmin(member);
 
     try {
       const ins = await pool.query(
@@ -342,15 +432,20 @@ module.exports = function punishmentCommands(ctx) {
       const summary = (details || '').slice(0, 200);
       try {
         await pool.query(
-          `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, created_at)
-           VALUES ($1, $2, $3, 'pending', $4, NOW())`,
-          [userIgn, staffDiscordId, summary, logId]
+          `INSERT INTO punishment_queue
+             (ign, staff_discord_id, details, status, punishment_log_id, submitter_level, submitter_is_head_admin, created_at)
+           VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW())`,
+          [userIgn, staffDiscordId, summary, logId, submitterLevel, submitterIsHeadAdmin]
         );
       } catch (e) {
         const code = e && e.code;
         const msg = String(e && e.message);
-        const missingLogIdCol = code === '42703' || /punishment_log_id/i.test(msg);
-        if (missingLogIdCol) {
+        const missingQueueCols =
+          code === '42703' ||
+          /punishment_log_id/i.test(msg) ||
+          /submitter_level/i.test(msg) ||
+          /submitter_is_head_admin/i.test(msg);
+        if (missingQueueCols) {
           await pool.query(
             `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, created_at)
              VALUES ($1, $2, $3, 'pending', NOW())`,
@@ -363,8 +458,8 @@ module.exports = function punishmentCommands(ctx) {
 
       await interaction.editReply({
         content:
-          `✅ Logged punishment **#${logId}** for **${userIgn}** and added it to the **manager review queue**.\n` +
-          `Duration set to **${cooldownRaw}** (progressive 3d -> 6d -> 12d...). Managers use **/checkqueue** (pages + Accept/Deny).`,
+          `✅ Logged punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
+          `Duration set to **${cooldownRaw}** (progressive 3d -> 6d -> 12d...). Use **/checkqueue** (pages + Accept/Deny).`,
       });
     } catch (e) {
       console.error('handleLog:', e);
@@ -413,6 +508,8 @@ module.exports = function punishmentCommands(ctx) {
     const reversalAt = isPermanentBan ? null : new Date(Date.now() + cooldownMs);
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
+    const submitterLevel = getMemberLevel(member);
+    const submitterIsHeadAdmin = isHeadAdmin(member);
 
     const ins = await pool.query(
       `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
@@ -422,18 +519,35 @@ module.exports = function punishmentCommands(ctx) {
     );
     const logId = ins.rows[0].id;
     const summary = (details || '').slice(0, 200);
-    await pool.query(
-      `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, punishment_log_id, created_at)
-       VALUES ($1, $2, $3, 'pending', $4, NOW())`,
-      [userIgn, staffDiscordId, summary, logId]
-    );
+    try {
+      await pool.query(
+        `INSERT INTO punishment_queue
+           (ign, staff_discord_id, details, status, punishment_log_id, submitter_level, submitter_is_head_admin, created_at)
+         VALUES ($1, $2, $3, 'pending', $4, $5, $6, NOW())`,
+        [userIgn, staffDiscordId, summary, logId, submitterLevel, submitterIsHeadAdmin]
+      );
+    } catch (e) {
+      const code = e && e.code;
+      const msg = String(e && e.message);
+      const missingQueueCols =
+        code === '42703' ||
+        /punishment_log_id/i.test(msg) ||
+        /submitter_level/i.test(msg) ||
+        /submitter_is_head_admin/i.test(msg);
+      if (!missingQueueCols) throw e;
+      await pool.query(
+        `INSERT INTO punishment_queue (ign, staff_discord_id, details, status, created_at)
+         VALUES ($1, $2, $3, 'pending', NOW())`,
+        [userIgn, staffDiscordId, summary]
+      );
+    }
     if (progressiveBan) {
       await pool.query(`UPDATE punishment_logs SET progressive_ban = true WHERE id = $1`, [logId]);
     }
 
     await interaction.editReply({
       content:
-        `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to manager review queue.\n` +
+        `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to review queue.\n` +
         `${
           progressiveBan
             ? 'Auto progressive ban duration'
