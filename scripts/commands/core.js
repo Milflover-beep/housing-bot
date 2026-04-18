@@ -846,6 +846,7 @@ module.exports = function coreCommands(ctx) {
     };
 
     const everyone = [
+      '`/uuid` — look up player UUID',
       '`/fighthistory` — fight history',
       '`/profile` — public player snapshot',
       '`/checkcommands` — this list',
