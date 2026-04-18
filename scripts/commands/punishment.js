@@ -612,7 +612,7 @@ module.exports = function punishmentCommands(ctx) {
   }
 
   async function handleActivepunishments(interaction) {
-    await defer(interaction, false);
+    await defer(interaction, true);
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
