@@ -252,8 +252,14 @@ module.exports = function coreCommands(ctx) {
       ]);
     }
 
+    const adminLevelForAltVisibility = 4;
+    const visibleAltRows =
+      getMemberLevel(runner) >= adminLevelForAltVisibility
+        ? altRows.rows
+        : altRows.rows.filter((row) => !row.is_whitelisted);
+
     const linkedAltIgns = new Set();
-    for (const row of altRows.rows) {
+    for (const row of visibleAltRows) {
       const orig = normalizeIgn(row.original_ign);
       const alt = normalizeIgn(row.alt_ign);
       if (orig && orig !== ign) linkedAltIgns.add(orig);
@@ -373,8 +379,8 @@ module.exports = function coreCommands(ctx) {
 
     /** Alts are never shown on the public reply — ephemeral follow-up to the invoker only. */
     let altStaffMessage = '';
-    if (altRows.rows.length > 0) {
-      const altList = altRows.rows.map((a) => `\`${a.original_ign}\` → \`${a.alt_ign}\``).join('\n');
+    if (visibleAltRows.length > 0) {
+      const altList = visibleAltRows.map((a) => `\`${a.original_ign}\` → \`${a.alt_ign}\``).join('\n');
       altStaffMessage = `🔀 **Known alts on file for \`${ign}\`** (only you can see this message):\n${altList}`;
       if (getMemberLevel(runner) < 2) {
         altStaffMessage +=
@@ -889,7 +895,6 @@ module.exports = function coreCommands(ctx) {
         '`/editalt`',
         '`/deletealt`',
         '`/clearalt`',
-        '`/whitelist`',
         '`/voidscore`',
         '`/publictierlistupdate`',
       ]);
@@ -904,6 +909,7 @@ module.exports = function coreCommands(ctx) {
         '`/removeuuid`',
         '`/adminblacklist`',
         '`/update` (IGN rename)',
+        '`/whitelist`',
         '`/roleblacklist`',
         '`/viewroleblacklist`',
         '`/updatescore`',

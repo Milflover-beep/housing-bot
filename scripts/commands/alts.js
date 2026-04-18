@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function altsCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn } = ctx;
+  const { pool, requireLevel, getMemberLevel, defer, normalizeIgn } = ctx;
 
   async function handleAddalt(interaction) {
     await defer(interaction, true);
@@ -22,15 +22,18 @@ module.exports = function altsCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
+    const viewerLevel = getMemberLevel(interaction.member);
     const ign = normalizeIgn(interaction.options.getString('ign'));
-    const r = await pool.query(
+    const allRows = await pool.query(
       `SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1`,
       [ign]
     );
-    if (r.rows.length === 0) {
+    // Whitelisted alts are admin-visible only.
+    const rows = viewerLevel >= 4 ? allRows.rows : allRows.rows.filter((row) => !row.is_whitelisted);
+    if (rows.length === 0) {
       return interaction.editReply({ content: `No alts found for **${ign}**.` });
     }
-    const lines = r.rows.map(
+    const lines = rows.map(
       (row) =>
         `• \`${row.original_ign}\` ↔ \`${row.alt_ign}\` (whitelist: ${row.is_whitelisted}) #${row.id}`
     );
@@ -97,8 +100,8 @@ module.exports = function altsCommands(ctx) {
 
   async function handleWhitelist(interaction) {
     await defer(interaction, true);
-    if (!requireLevel(interaction.member, 3)) {
-      return interaction.editReply({ content: '❌ Managers or higher only.' });
+    if (!requireLevel(interaction.member, 4)) {
+      return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
     const ignLower = normalizeIgn(interaction.options.getString('ign'));
     const on = interaction.options.getBoolean('whitelisted');
