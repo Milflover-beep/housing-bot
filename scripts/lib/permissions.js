@@ -1,5 +1,3 @@
-const { PermissionFlagsBits } = require('discord.js');
-
 /**
  * Role hierarchy (higher number = more power):
  * 0 = normal member (no bot access role)
@@ -101,16 +99,11 @@ function applicantRoleName() {
 }
 
 /**
- * 0–4 from Discord roles. Checks highest tier first (someone with admin + PM only counts as admin).
- * Also: BOT_OWNER_IDS, guild owner, and Discord Administrator count as level 4 so staff+ commands work
- * when role IDs are misconfigured or the member object had an incomplete role cache.
+ * 0–4 from configured Discord access roles only.
+ * Checks highest tier first (someone with admin + PM only counts as admin).
  */
 function getMemberLevel(member) {
   if (!member) return 0;
-  const uid = member.user?.id ?? member.id;
-  if (uid && OWNER_IDS.has(uid)) return 4;
-  if (member.guild?.ownerId === member.id) return 4;
-  if (member.permissions?.has?.(PermissionFlagsBits.Administrator)) return 4;
   if (hasTierRole(member, 'admin')) return 4;
   if (hasTierRole(member, 'manager')) return 3;
   if (hasTierRole(member, 'staff')) return 2;
