@@ -17,6 +17,7 @@ module.exports = function applicationsCommands(ctx) {
     parseRoleIdList,
     resolveGuildMember,
     parseCooldownToMs,
+    resolveIgnIdentity,
     VALID_TIERS,
   } = ctx;
 
@@ -116,7 +117,8 @@ module.exports = function applicationsCommands(ctx) {
     if (!interaction.guild) {
       return interaction.editReply({ content: '❌ Use this command in a server.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
     const letter = RANK_LETTER[typeStr];
@@ -180,7 +182,8 @@ module.exports = function applicationsCommands(ctx) {
     if (!interaction.guild) {
       return interaction.editReply({ content: '❌ Use this command in a server.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign', true));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign', true));
+    const ign = identity.canonicalIgn || identity.ign;
     const typeStr = interaction.options.getString('type', true);
     const discordUser = interaction.options.getUser('discord', true);
 
@@ -212,7 +215,9 @@ module.exports = function applicationsCommands(ctx) {
     if (!interaction.guild) {
       return interaction.editReply({ content: '❌ Use this command in a server.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
     const tier = interaction.options.getString('tier');
@@ -225,7 +230,7 @@ module.exports = function applicationsCommands(ctx) {
     const typeLetter = RANK_LETTER[typeStr];
     const tester = interaction.user.username;
 
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1', [ign]);
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,

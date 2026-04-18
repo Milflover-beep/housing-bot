@@ -36,6 +36,115 @@ function normalizeIgn(s) {
   return String(s || '').trim().toLowerCase();
 }
 
+function normalizeUuidCompact(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '');
+}
+
+async function fetchMojangProfileByIgn(ignLower) {
+  if (!ignLower) return null;
+  const url = `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(ignLower)}`;
+  let res;
+  try {
+    res = await fetch(url, { headers: { Accept: 'application/json' } });
+  } catch {
+    return null;
+  }
+  if (!res?.ok) return null;
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
+  const uuid = normalizeUuidCompact(data?.id);
+  const name = normalizeIgn(data?.name);
+  if (!uuid || !name) return null;
+  return { uuid, name };
+}
+
+/**
+ * Resolve identity aliases for an IGN so commands can match historical names after name changes.
+ * Returns lowercased IGNs for SQL comparisons.
+ */
+async function resolveIgnIdentity(pool, ignInput, options = {}) {
+  const ign = normalizeIgn(ignInput);
+  const aliases = new Set();
+  if (!ign) return { ign: '', canonicalIgn: '', uuid: null, aliases: [] };
+  aliases.add(ign);
+
+  const allowMojang = options.allowMojang !== false;
+  let uuid = null;
+  let canonicalIgn = ign;
+
+  try {
+    const local = await pool.query(
+      `SELECT uuid
+       FROM uuid_registry
+       WHERE LOWER(TRIM(ign)) = $1
+         AND COALESCE(TRIM(uuid), '') <> ''
+       ORDER BY id DESC
+       LIMIT 1`,
+      [ign]
+    );
+    if (local.rows[0]?.uuid) uuid = normalizeUuidCompact(local.rows[0].uuid);
+  } catch {
+    // ignore: uuid_registry might not exist on very old schema
+  }
+
+  if (!uuid && allowMojang) {
+    const remote = await fetchMojangProfileByIgn(ign);
+    if (remote) {
+      uuid = remote.uuid;
+      canonicalIgn = remote.name;
+      aliases.add(canonicalIgn);
+    }
+  }
+
+  if (uuid) {
+    try {
+      await pool.query(
+        `INSERT INTO uuid_registry (ign, uuid, created_at)
+         SELECT $1, $2, NOW()
+         WHERE NOT EXISTS (
+           SELECT 1 FROM uuid_registry
+           WHERE LOWER(TRIM(ign)) = $1
+             AND LOWER(REPLACE(TRIM(uuid), '-', '')) = $2
+         )`,
+        [ign, uuid]
+      );
+      if (canonicalIgn && canonicalIgn !== ign) {
+        await pool.query(
+          `INSERT INTO uuid_registry (ign, uuid, created_at)
+           SELECT $1, $2, NOW()
+           WHERE NOT EXISTS (
+             SELECT 1 FROM uuid_registry
+             WHERE LOWER(TRIM(ign)) = $1
+               AND LOWER(REPLACE(TRIM(uuid), '-', '')) = $2
+           )`,
+          [canonicalIgn, uuid]
+        );
+      }
+      const rows = await pool.query(
+        `SELECT DISTINCT LOWER(TRIM(ign)) AS ign
+         FROM uuid_registry
+         WHERE LOWER(REPLACE(TRIM(uuid), '-', '')) = $1
+           AND COALESCE(TRIM(ign), '') <> ''`,
+        [uuid]
+      );
+      for (const r of rows.rows) {
+        if (r.ign) aliases.add(String(r.ign));
+      }
+    } catch {
+      // ignore registry write/read errors
+    }
+  }
+
+  return { ign, canonicalIgn, uuid, aliases: Array.from(aliases) };
+}
+
 function tierRank(tier) {
   let key = String(tier || '')
     .trim()
@@ -201,6 +310,8 @@ module.exports = {
   VALID_TIERS,
   TIER_ORDER,
   normalizeIgn,
+  normalizeUuidCompact,
+  resolveIgnIdentity,
   normalizeTierLabelForDb,
   normalizeLadderTypeForDb,
   minecraftHeadUrl,

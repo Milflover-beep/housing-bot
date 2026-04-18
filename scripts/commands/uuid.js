@@ -7,7 +7,7 @@ function formatUuid(raw) {
 }
 
 module.exports = function uuidCommands(ctx) {
-  const { pool, isAdminOrOwner, defer, normalizeIgn } = ctx;
+  const { pool, isAdminOrOwner, defer, normalizeIgn, resolveIgnIdentity } = ctx;
 
   async function handleUuid(interaction) {
     await defer(interaction, false);
@@ -69,9 +69,13 @@ module.exports = function uuidCommands(ctx) {
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const uuid = interaction.options.getString('uuid').trim();
-    const existing = await pool.query('SELECT id FROM uuid_registry WHERE LOWER(ign) = $1', [ign]);
+    const existing = await pool.query('SELECT id FROM uuid_registry WHERE LOWER(ign) = ANY($1::text[])', [
+      ignAliases,
+    ]);
     if (existing.rows.length) {
       await pool.query('UPDATE uuid_registry SET uuid = $1 WHERE id = $2', [uuid, existing.rows[0].id]);
     } else {
@@ -88,8 +92,12 @@ module.exports = function uuidCommands(ctx) {
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
-    const q = await pool.query('DELETE FROM uuid_registry WHERE LOWER(ign) = $1 RETURNING id', [ign]);
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
+    const q = await pool.query('DELETE FROM uuid_registry WHERE LOWER(ign) = ANY($1::text[]) RETURNING id', [
+      ignAliases,
+    ]);
     await interaction.editReply({
       content: q.rowCount ? `✅ Removed UUID row(s) for **${ign}**.` : '❌ No row found.',
     });

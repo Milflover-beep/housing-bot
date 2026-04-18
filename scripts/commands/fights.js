@@ -2,7 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 
 module.exports = function fightsCommands(ctx) {
-  const { pool, isAdminOrOwner, requireLevel, defer, normalizeIgn } = ctx;
+  const { pool, isAdminOrOwner, requireLevel, defer, normalizeIgn, resolveIgnIdentity } = ctx;
 
   async function sendFightActionLog(client, action, row, actorUsername) {
     const title = action === 'voided' ? 'Fight Voided' : 'Fight Deleted';
@@ -36,12 +36,14 @@ module.exports = function fightsCommands(ctx) {
     const vals = [];
     let n = 1;
     if (winner) {
+      const winnerIdentity = await resolveIgnIdentity(pool, winner);
       sets.push(`winner_ign = $${n++}`);
-      vals.push(normalizeIgn(winner));
+      vals.push(winnerIdentity.canonicalIgn || winnerIdentity.ign);
     }
     if (loser) {
+      const loserIdentity = await resolveIgnIdentity(pool, loser);
       sets.push(`loser_ign = $${n++}`);
-      vals.push(normalizeIgn(loser));
+      vals.push(loserIdentity.canonicalIgn || loserIdentity.ign);
     }
     if (score) {
       sets.push(`final_score = $${n++}`);

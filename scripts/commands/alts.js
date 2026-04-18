@@ -1,15 +1,19 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function altsCommands(ctx) {
-  const { pool, requireLevel, getMemberLevel, defer, normalizeIgn } = ctx;
+  const { pool, requireLevel, getMemberLevel, defer, normalizeIgn, resolveIgnIdentity } = ctx;
 
   async function handleAddalt(interaction) {
     await defer(interaction, true);
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const orig = normalizeIgn(interaction.options.getString('original-ign'));
-    const alt = normalizeIgn(interaction.options.getString('alt-ign'));
+    const [origIdentity, altIdentity] = await Promise.all([
+      resolveIgnIdentity(pool, interaction.options.getString('original-ign')),
+      resolveIgnIdentity(pool, interaction.options.getString('alt-ign')),
+    ]);
+    const orig = origIdentity.canonicalIgn || origIdentity.ign;
+    const alt = altIdentity.canonicalIgn || altIdentity.ign;
     await pool.query(
       `INSERT INTO alts (original_ign, alt_ign, created_at, is_whitelisted) VALUES ($1, $2, NOW(), false)`,
       [orig, alt]
@@ -23,10 +27,12 @@ module.exports = function altsCommands(ctx) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const viewerLevel = getMemberLevel(interaction.member);
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const allRows = await pool.query(
-      `SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1`,
-      [ign]
+      `SELECT * FROM alts WHERE LOWER(original_ign) = ANY($1::text[]) OR LOWER(alt_ign) = ANY($1::text[])`,
+      [ignAliases]
     );
     // Whitelisted alts are admin-visible only.
     const rows = viewerLevel >= 4 ? allRows.rows : allRows.rows.filter((row) => !row.is_whitelisted);
@@ -64,8 +70,12 @@ module.exports = function altsCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const orig = normalizeIgn(interaction.options.getString('original-ign'));
-    const q = await pool.query('DELETE FROM alts WHERE LOWER(original_ign) = $1 RETURNING id', [orig]);
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('original-ign'));
+    const orig = identity.canonicalIgn || identity.ign;
+    const origAliases = identity.aliases.length ? identity.aliases : [orig];
+    const q = await pool.query('DELETE FROM alts WHERE LOWER(original_ign) = ANY($1::text[]) RETURNING id', [
+      origAliases,
+    ]);
     await interaction.editReply({
       content: q.rowCount ? `✅ Cleared **${q.rowCount}** alt row(s) for **${orig}**.` : '❌ No rows.',
     });
@@ -83,12 +93,14 @@ module.exports = function altsCommands(ctx) {
     const vals = [];
     let n = 1;
     if (newOrig) {
+      const newOrigIdentity = await resolveIgnIdentity(pool, newOrig);
       sets.push(`original_ign = $${n++}`);
-      vals.push(normalizeIgn(newOrig));
+      vals.push(newOrigIdentity.canonicalIgn || newOrigIdentity.ign);
     }
     if (newAlt) {
+      const newAltIdentity = await resolveIgnIdentity(pool, newAlt);
       sets.push(`alt_ign = $${n++}`);
-      vals.push(normalizeIgn(newAlt));
+      vals.push(newAltIdentity.canonicalIgn || newAltIdentity.ign);
     }
     if (!sets.length) {
       return interaction.editReply({ content: '❌ Provide at least one field to change.' });
@@ -103,11 +115,13 @@ module.exports = function altsCommands(ctx) {
     if (!requireLevel(interaction.member, 4)) {
       return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
-    const ignLower = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ignLower = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ignLower];
     const on = interaction.options.getBoolean('whitelisted');
-    await pool.query('UPDATE alts SET is_whitelisted = $1 WHERE LOWER(original_ign) = $2', [
+    await pool.query('UPDATE alts SET is_whitelisted = $1 WHERE LOWER(original_ign) = ANY($2::text[])', [
       on,
-      ignLower,
+      ignAliases,
     ]);
     if (on) {
       await pool.query('INSERT INTO original_whitelist (original_ign, created_at) VALUES ($1, NOW())', [

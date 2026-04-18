@@ -16,50 +16,60 @@ function parseFinalScore(str) {
 }
 
 module.exports = function profileCommands(ctx) {
-  const { pool, defer, normalizeIgn, typeLetterToName, minecraftHeadUrl, clampSideScoreForStats } = ctx;
+  const {
+    pool,
+    defer,
+    normalizeIgn,
+    resolveIgnIdentity,
+    typeLetterToName,
+    minecraftHeadUrl,
+    clampSideScoreForStats,
+  } = ctx;
 
   async function handleProfile(interaction) {
     await defer(interaction, false);
 
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
 
     const [tierNow, scoreAgg, scoreRecent, scoreRowsAvg, denialRow] = await Promise.all([
       pool.query(
         `SELECT type, tier FROM tier_results
-         WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text)) AND COALESCE(TRIM(tier), '') <> ''
+         WHERE LOWER(TRIM(ign)) = ANY($1::text[]) AND COALESCE(TRIM(tier), '') <> ''
          ORDER BY id DESC
          LIMIT 1`,
-        [ign]
+        [ignAliases]
       ),
       pool.query(
         `SELECT
            COUNT(*)::int AS total,
-           SUM(CASE WHEN LOWER(winner_ign) = $1 THEN 1 ELSE 0 END)::int AS wins,
-           SUM(CASE WHEN LOWER(loser_ign) = $1 THEN 1 ELSE 0 END)::int AS losses
+           SUM(CASE WHEN LOWER(winner_ign) = ANY($1::text[]) THEN 1 ELSE 0 END)::int AS wins,
+           SUM(CASE WHEN LOWER(loser_ign) = ANY($1::text[]) THEN 1 ELSE 0 END)::int AS losses
          FROM scores s
-         WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1) AND s.is_voided = false`,
-        [ign]
+         WHERE (LOWER(s.winner_ign) = ANY($1::text[]) OR LOWER(s.loser_ign) = ANY($1::text[])) AND s.is_voided = false`,
+        [ignAliases]
       ),
       pool.query(
         `SELECT winner_ign, loser_ign, final_score, fight_type, created_at, fight_number
          FROM scores s
-         WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1) AND s.is_voided = false
+         WHERE (LOWER(s.winner_ign) = ANY($1::text[]) OR LOWER(s.loser_ign) = ANY($1::text[])) AND s.is_voided = false
          ORDER BY s.created_at DESC, s.id DESC
          LIMIT $2`,
-        [ign, RECENT_FIGHTS]
+        [ignAliases, RECENT_FIGHTS]
       ),
       pool.query(
         `SELECT final_score, winner_ign, loser_ign FROM scores s
-         WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1) AND s.is_voided = false
+         WHERE (LOWER(s.winner_ign) = ANY($1::text[]) OR LOWER(s.loser_ign) = ANY($1::text[])) AND s.is_voided = false
          ORDER BY s.id DESC
          LIMIT $2`,
-        [ign, AVG_SCORE_FIGHT_CAP]
+        [ignAliases, AVG_SCORE_FIGHT_CAP]
       ),
       pool
         .query(
           `SELECT rank_type, cooldown_until FROM application_denials
-           WHERE LOWER(ign) = $1 AND cooldown_until > NOW() LIMIT 1`,
-          [ign]
+           WHERE LOWER(ign) = ANY($1::text[]) AND cooldown_until > NOW() LIMIT 1`,
+          [ignAliases]
         )
         .catch(() => ({ rows: [] })),
     ]);
@@ -74,7 +84,7 @@ module.exports = function profileCommands(ctx) {
     for (const row of scoreRowsAvg.rows) {
       const parsed = parseFinalScore(row.final_score);
       if (!parsed) continue;
-      const won = String(row.winner_ign || '').trim().toLowerCase() === ign;
+      const won = ignAliases.includes(String(row.winner_ign || '').trim().toLowerCase());
       ptsList.push(
         clampSideScoreForStats(won ? parsed.winnerPts : parsed.loserPts)
       );
@@ -88,7 +98,7 @@ module.exports = function profileCommands(ctx) {
       total > 0 && scoreRecent.rows.length > 0
         ? scoreRecent.rows
             .map((r) => {
-              const won = String(r.winner_ign || '').toLowerCase() === ign;
+              const won = ignAliases.includes(String(r.winner_ign || '').toLowerCase());
               const opponent = won ? r.loser_ign : r.winner_ign;
               const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '—';
               const ft = r.fight_type ? String(r.fight_type) : '—';

@@ -1,14 +1,23 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = function watchlistCommands(ctx) {
-  const { pool, requireLevel, isAdminOrOwner, defer, normalizeIgn, getSlashSubcommand } = ctx;
+  const {
+    pool,
+    requireLevel,
+    isAdminOrOwner,
+    defer,
+    normalizeIgn,
+    resolveIgnIdentity,
+    getSlashSubcommand,
+  } = ctx;
 
   async function handleWatchlistAdd(interaction) {
     await defer(interaction, true);
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
     const reason = interaction.options.getString('reason');
     const threat = interaction.options.getString('threat-level');
     await pool.query(
@@ -23,10 +32,12 @@ module.exports = function watchlistCommands(ctx) {
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const r = await pool.query(
-      'DELETE FROM watchlist WHERE LOWER(ign) = $1 RETURNING id',
-      [ign]
+      'DELETE FROM watchlist WHERE LOWER(ign) = ANY($1::text[]) RETURNING id',
+      [ignAliases]
     );
     await interaction.editReply({
       content: r.rowCount ? `✅ Removed watchlist rows for **${ign}**.` : '❌ No matching rows.',

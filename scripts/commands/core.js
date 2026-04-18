@@ -23,6 +23,7 @@ module.exports = function coreCommands(ctx) {
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
     resolveGuildMember,
+    resolveIgnIdentity,
     clampSideScoreForStats,
   } = ctx;
 
@@ -81,7 +82,8 @@ module.exports = function coreCommands(ctx) {
     return Number(n).toFixed(digits);
   }
 
-  function buildFightHistoryDebugFields(ignLower, rows) {
+  function buildFightHistoryDebugFields(ignKeys, rows) {
+    const keys = Array.isArray(ignKeys) ? ignKeys : [String(ignKeys || '').toLowerCase()];
     const byType = {};
     let unparseable = 0;
     const chronological = [];
@@ -99,7 +101,7 @@ module.exports = function coreCommands(ctx) {
     };
 
     for (const r of rows) {
-      const won = String(r.winner_ign || '').trim().toLowerCase() === ignLower;
+      const won = keys.includes(String(r.winner_ign || '').trim().toLowerCase());
       const tk = typeKey(r.fight_type);
       if (!byType[tk]) byType[tk] = { w: 0, l: 0 };
       if (won) byType[tk].w += 1;
@@ -185,7 +187,10 @@ module.exports = function coreCommands(ctx) {
           '❌ PM or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const ignInput = interaction.options.getString('ign');
+    const identity = await resolveIgnIdentity(pool, ignInput);
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const discordUser = interaction.options.getUser('discord', true);
     const discord = discordUser.id;
     const rankType = interaction.options.getString('rank-type');
@@ -205,20 +210,23 @@ module.exports = function coreCommands(ctx) {
       [blacklistRows, adminBlacklistRows, altRows] = await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
-           WHERE LOWER(ign) = $1
+           WHERE LOWER(ign) = ANY($1::text[])
              AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ign]
+          [ignAliases]
         ),
         pool.query(
           `SELECT * FROM admin_blacklists
-           WHERE LOWER(ign) = $1
+           WHERE LOWER(ign) = ANY($1::text[])
              AND is_pardoned = false
              AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ign]
+          [ignAliases]
         ),
-        pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
-          ign,
-        ]),
+        pool.query(
+          `SELECT * FROM alts
+           WHERE LOWER(original_ign) = ANY($1::text[])
+              OR LOWER(alt_ign) = ANY($1::text[])`,
+          [ignAliases]
+        ),
       ]);
       allTierRows = { rows: [] };
       hypixelResult = { ok: true, pmSkip: true };
@@ -226,27 +234,30 @@ module.exports = function coreCommands(ctx) {
       [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
-           WHERE LOWER(ign) = $1
+           WHERE LOWER(ign) = ANY($1::text[])
              AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ign]
+          [ignAliases]
         ),
         pool.query(
           `SELECT * FROM admin_blacklists
-           WHERE LOWER(ign) = $1
+           WHERE LOWER(ign) = ANY($1::text[])
              AND is_pardoned = false
              AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ign]
+          [ignAliases]
         ),
-        pool.query('SELECT * FROM alts WHERE LOWER(original_ign) = $1 OR LOWER(alt_ign) = $1', [
-          ign,
-        ]),
+        pool.query(
+          `SELECT * FROM alts
+           WHERE LOWER(original_ign) = ANY($1::text[])
+              OR LOWER(alt_ign) = ANY($1::text[])`,
+          [ignAliases]
+        ),
         pool.query(
           `SELECT type, tier, created_at
          FROM tier_results
-         WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text)) AND type IN ('P','E','A')
+         WHERE LOWER(TRIM(ign)) = ANY($1::text[]) AND type IN ('P','E','A')
          ORDER BY id DESC
          LIMIT 1`,
-          [ign]
+          [ignAliases]
         ),
         fetchNetworkLevelForCheck(hypixelKey, ign),
       ]);
@@ -552,8 +563,12 @@ module.exports = function coreCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff only.' });
     }
-    const winnerIgn = normalizeIgn(interaction.options.getString('winner-ign'));
-    const loserIgn = normalizeIgn(interaction.options.getString('loser-ign'));
+    const [winnerIdentity, loserIdentity] = await Promise.all([
+      resolveIgnIdentity(pool, interaction.options.getString('winner-ign')),
+      resolveIgnIdentity(pool, interaction.options.getString('loser-ign')),
+    ]);
+    const winnerIgn = winnerIdentity.canonicalIgn || winnerIdentity.ign;
+    const loserIgn = loserIdentity.canonicalIgn || loserIdentity.ign;
     const finalScore = interaction.options.getString('final-score');
     const fightNumber = interaction.options.getInteger('fight-number');
     const fightType = interaction.options.getString('fight-type');
@@ -620,13 +635,13 @@ module.exports = function coreCommands(ctx) {
     return [row];
   }
 
-  async function buildFightHistoryPayload(ignDisplay, ignLower, page, showIds) {
+  async function buildFightHistoryPayload(ignDisplay, ignLower, ignAliases, page, showIds) {
     const perPage = 15;
 
     const countRes = await pool.query(
       `SELECT COUNT(*)::int AS c FROM scores
-       WHERE (LOWER(winner_ign) = $1 OR LOWER(loser_ign) = $1) AND is_voided = false`,
-      [ignLower]
+       WHERE (LOWER(winner_ign) = ANY($1::text[]) OR LOWER(loser_ign) = ANY($1::text[])) AND is_voided = false`,
+      [ignAliases]
     );
     const totalFights = countRes.rows[0].c || 0;
 
@@ -638,11 +653,11 @@ module.exports = function coreCommands(ctx) {
 
     const statsRes = await pool.query(
       `SELECT
-         SUM(CASE WHEN LOWER(winner_ign) = $1 THEN 1 ELSE 0 END)::int AS wins,
-         SUM(CASE WHEN LOWER(loser_ign) = $1 THEN 1 ELSE 0 END)::int AS losses
+         SUM(CASE WHEN LOWER(winner_ign) = ANY($1::text[]) THEN 1 ELSE 0 END)::int AS wins,
+         SUM(CASE WHEN LOWER(loser_ign) = ANY($1::text[]) THEN 1 ELSE 0 END)::int AS losses
        FROM scores
-       WHERE (LOWER(winner_ign) = $1 OR LOWER(loser_ign) = $1) AND is_voided = false`,
-      [ignLower]
+       WHERE (LOWER(winner_ign) = ANY($1::text[]) OR LOWER(loser_ign) = ANY($1::text[])) AND is_voided = false`,
+      [ignAliases]
     );
     const wins = statsRes.rows[0].wins || 0;
     const losses = statsRes.rows[0].losses || 0;
@@ -654,16 +669,16 @@ module.exports = function coreCommands(ctx) {
 
     const result = await pool.query(
       `SELECT * FROM scores
-       WHERE (LOWER(winner_ign) = $1 OR LOWER(loser_ign) = $1)
+       WHERE (LOWER(winner_ign) = ANY($1::text[]) OR LOWER(loser_ign) = ANY($1::text[]))
        AND is_voided = false
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
-      [ignLower, perPage, offset]
+      [ignAliases, perPage, offset]
     );
 
     const history = result.rows
       .map((r) => {
-        const won = r.winner_ign.toLowerCase() === ignLower;
+        const won = ignAliases.includes(r.winner_ign.toLowerCase());
         const opponent = won ? r.loser_ign : r.winner_ign;
         const date = new Date(r.created_at).toLocaleDateString();
         const idPart = showIds ? ` · **ID** \`${r.id}\`` : '';
@@ -684,12 +699,12 @@ module.exports = function coreCommands(ctx) {
       const debugRows = await pool.query(
         `SELECT winner_ign, loser_ign, final_score, fight_type, created_at
          FROM scores
-         WHERE (LOWER(winner_ign) = $1 OR LOWER(loser_ign) = $1) AND is_voided = false
+         WHERE (LOWER(winner_ign) = ANY($1::text[]) OR LOWER(loser_ign) = ANY($1::text[])) AND is_voided = false
          ORDER BY created_at ASC, id ASC
          LIMIT 3000`,
-        [ignLower]
+        [ignAliases]
       );
-      baseFields.push(...buildFightHistoryDebugFields(ignLower, debugRows.rows));
+      baseFields.push(...buildFightHistoryDebugFields(ignAliases, debugRows.rows));
       if (debugRows.rows.length >= 3000) {
         debugFooterNote = ' · Debug stats use first 3000 fights';
       }
@@ -719,8 +734,10 @@ module.exports = function coreCommands(ctx) {
 
   async function handleFightHistory(interaction) {
     await defer(interaction, false);
-    const ignLower = normalizeIgn(interaction.options.getString('ign'));
-    const ign = ignLower;
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ignLower = identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ignLower];
+    const ign = identity.canonicalIgn || ignLower;
     const page = Math.max(1, interaction.options.getInteger('page') ?? 1);
     const wantsDebug = interaction.options.getBoolean('debug') === true;
     if (wantsDebug && !requireLevel(interaction.member, 2)) {
@@ -729,7 +746,7 @@ module.exports = function coreCommands(ctx) {
       });
     }
     const showIds = wantsDebug && requireLevel(interaction.member, 2);
-    const payload = await buildFightHistoryPayload(ign, ignLower, page, showIds);
+    const payload = await buildFightHistoryPayload(ign, ignLower, ignAliases, page, showIds);
     if (payload.error) {
       return interaction.editReply({ content: payload.error });
     }
@@ -761,8 +778,10 @@ module.exports = function coreCommands(ctx) {
     }
     const showIds = debugFromButton && requireLevel(interaction.member, 2);
     await interaction.deferUpdate();
+    const identity = await resolveIgnIdentity(pool, ignLower);
+    const ignAliases = identity.aliases.length ? identity.aliases : [ignLower];
     const ignDisplay = ignLower;
-    const payload = await buildFightHistoryPayload(ignDisplay, ignLower, targetPage, showIds);
+    const payload = await buildFightHistoryPayload(ignDisplay, ignLower, ignAliases, targetPage, showIds);
     if (payload.error) {
       return interaction.editReply({ content: payload.error, embeds: [], components: [] });
     }
@@ -778,7 +797,9 @@ module.exports = function coreCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const type = interaction.options.getString('type');
     const tier = interaction.options.getString('tier');
     const discordUser = interaction.options.getUser('discord');
@@ -791,11 +812,11 @@ module.exports = function coreCommands(ctx) {
     }
 
     const existing = await pool.query(
-      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 1',
-      [ign]
+      'SELECT * FROM tier_results WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 1',
+      [ignAliases]
     );
 
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1', [ign]);
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,

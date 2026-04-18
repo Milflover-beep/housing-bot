@@ -2,15 +2,17 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { fetchNetworkLevelForCheck } = require('../lib/hypixel');
 
 module.exports = function hypixelSlash(ctx) {
-  const { defer, normalizeIgn, requireLevel } = ctx;
+  const { defer, normalizeIgn, requireLevel, resolveIgnIdentity, pool } = ctx;
 
   async function handleHypixel(interaction) {
     await defer(interaction, true);
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
-    const result = await fetchNetworkLevelForCheck(process.env.HYPIXEL_API_KEY, ign);
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const hypixelLookup = identity.uuid || ign;
+    const result = await fetchNetworkLevelForCheck(process.env.HYPIXEL_API_KEY, hypixelLookup);
     const embed = new EmbedBuilder().setTitle(`Hypixel: ${ign}`).setTimestamp();
 
     if (!result.ok) {

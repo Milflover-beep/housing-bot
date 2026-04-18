@@ -1,17 +1,19 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function reportsCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn } = ctx;
+  const { pool, requireLevel, defer, normalizeIgn, resolveIgnIdentity } = ctx;
 
   async function handleBancheck(interaction) {
     await defer(interaction, false);
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const r = await pool.query(
-      'SELECT * FROM reports WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 25',
-      [ign]
+      'SELECT * FROM reports WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 25',
+      [ignAliases]
     );
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No reports for **${ign}**.` });

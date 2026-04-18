@@ -7,6 +7,7 @@ module.exports = function pmCommands(ctx) {
     isAdminOrOwner,
     defer,
     normalizeIgn,
+    resolveIgnIdentity,
     resolveGuildMember,
     minecraftHeadUrl,
     clampSideScoreForStats,
@@ -116,7 +117,8 @@ module.exports = function pmCommands(ctx) {
    * @param {string} ignLower
    * @param {Array<{ winner_ign: string, loser_ign: string, final_score: string, fight_type: string, fight_number: number, created_at: Date }>} rows oldest-first
    */
-  function buildPmDebugEmbed(ignLower, rows) {
+  function buildPmDebugEmbed(ignKeys, rows) {
+    const keys = Array.isArray(ignKeys) ? ignKeys : [String(ignKeys || '').toLowerCase()];
     const typeKey = (ft) => {
       const s = String(ft || '').toLowerCase();
       if (s === 'prime' || s === 'p') return 'Prime';
@@ -140,7 +142,7 @@ module.exports = function pmCommands(ctx) {
 
     for (const r of rows) {
       const wIn = String(r.winner_ign || '').trim().toLowerCase();
-      const won = wIn === ignLower;
+      const won = keys.includes(wIn);
       const tk = typeKey(r.fight_type);
       if (!byType[tk]) byType[tk] = { w: 0, l: 0 };
       if (won) byType[tk].w += 1;
@@ -251,7 +253,7 @@ module.exports = function pmCommands(ctx) {
     ].join('\n');
 
     return new EmbedBuilder()
-      .setTitle(`PM stats (debug): ${ignLower}`)
+      .setTitle(`PM stats (debug): ${keys[0] || 'unknown'}`)
       .setColor(0x9b59b6)
       .setDescription('Staff-only detailed breakdown from `scores`.')
       .addFields(
@@ -303,7 +305,8 @@ module.exports = function pmCommands(ctx) {
           '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
     const ping = interaction.options.getInteger('ping');
     const uuid = interaction.options.getString('uuid');
     const mgrType = parseManagerType(interaction.options.getString('manager-type'));
@@ -353,12 +356,16 @@ module.exports = function pmCommands(ctx) {
           '❌ Admin or owner only. If you have the role, enable **Server Members Intent** for the bot and restart it.',
       });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const client = await pool.connect();
     let q;
     try {
       await client.query('BEGIN');
-      q = await client.query('DELETE FROM pm_list WHERE LOWER(TRIM(ign)) = $1 RETURNING ign', [ign]);
+      q = await client.query('DELETE FROM pm_list WHERE LOWER(TRIM(ign)) = ANY($1::text[]) RETURNING ign', [
+        ignAliases,
+      ]);
       if (q.rows.length > 0) {
         await client.query(
           `UPDATE pm_membership_periods
@@ -396,10 +403,13 @@ module.exports = function pmCommands(ctx) {
           '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
-    const oldIgn = normalizeIgn(interaction.options.getString('old-ign'));
+    const oldIdentity = await resolveIgnIdentity(pool, interaction.options.getString('old-ign'));
+    const oldIgn = oldIdentity.canonicalIgn || oldIdentity.ign;
+    const oldAliases = oldIdentity.aliases.length ? oldIdentity.aliases : [oldIgn];
     const newIgnOpt = interaction.options.getString('new-ign');
-    const newIgn =
-      newIgnOpt && String(newIgnOpt).trim() ? normalizeIgn(newIgnOpt) : null;
+    const newIgnRaw = newIgnOpt && String(newIgnOpt).trim() ? String(newIgnOpt).trim() : null;
+    const newIdentity = newIgnRaw ? await resolveIgnIdentity(pool, newIgnRaw) : null;
+    const newIgn = newIdentity ? newIdentity.canonicalIgn || newIdentity.ign : null;
     const ping = interaction.options.getInteger('ping');
     const mgrOpt = interaction.options.getString('manager-type');
 
@@ -411,8 +421,8 @@ module.exports = function pmCommands(ctx) {
       });
     }
 
-    const currentRows = await pool.query('SELECT id FROM pm_list WHERE LOWER(TRIM(ign)) = $1', [
-      oldIgn,
+    const currentRows = await pool.query('SELECT id FROM pm_list WHERE LOWER(TRIM(ign)) = ANY($1::text[])', [
+      oldAliases,
     ]);
     if (currentRows.rows.length === 0) {
       return interaction.editReply({ content: `❌ No PM list entry for **${oldIgn}**.` });
@@ -446,7 +456,7 @@ module.exports = function pmCommands(ctx) {
       parts.push(`manager_type = $${n++}`);
       vals.push(parseManagerType(mgrOpt));
     }
-    vals.push(oldIgn);
+    vals.push(oldAliases);
 
     const client = await pool.connect();
     let q;
@@ -454,7 +464,7 @@ module.exports = function pmCommands(ctx) {
     try {
       await client.query('BEGIN');
       q = await client.query(
-        `UPDATE pm_list SET ${parts.join(', ')} WHERE LOWER(TRIM(ign)) = $${n} RETURNING ign`,
+        `UPDATE pm_list SET ${parts.join(', ')} WHERE LOWER(TRIM(ign)) = ANY($${n}::text[]) RETURNING ign`,
         vals
       );
       if (q.rows.length === 0) {
@@ -463,21 +473,21 @@ module.exports = function pmCommands(ctx) {
       }
       if (wantsRename) {
         const winUpd = await client.query(
-          `UPDATE scores SET winner_ign = $1 WHERE LOWER(TRIM(winner_ign)) = $2`,
-          [newIgn, oldIgn]
+          `UPDATE scores SET winner_ign = $1 WHERE LOWER(TRIM(winner_ign)) = ANY($2::text[])`,
+          [newIgn, oldAliases]
         );
         const lossUpd = await client.query(
-          `UPDATE scores SET loser_ign = $1 WHERE LOWER(TRIM(loser_ign)) = $2`,
-          [newIgn, oldIgn]
+          `UPDATE scores SET loser_ign = $1 WHERE LOWER(TRIM(loser_ign)) = ANY($2::text[])`,
+          [newIgn, oldAliases]
         );
         migrated = {
           wins: winUpd.rowCount || 0,
           losses: lossUpd.rowCount || 0,
         };
-        await client.query(`UPDATE pm_membership_periods SET ign = $1 WHERE LOWER(TRIM(ign)) = $2`, [
-          newIgn,
-          oldIgn,
-        ]);
+        await client.query(
+          `UPDATE pm_membership_periods SET ign = $1 WHERE LOWER(TRIM(ign)) = ANY($2::text[])`,
+          [newIgn, oldAliases]
+        );
       }
       await client.query('COMMIT');
     } catch (err) {
@@ -518,7 +528,9 @@ module.exports = function pmCommands(ctx) {
       });
     }
     const ignOpt = interaction.options.getString('ign');
-    const ign = ignOpt && String(ignOpt).trim() ? normalizeIgn(ignOpt) : '';
+    const identity = ignOpt && String(ignOpt).trim() ? await resolveIgnIdentity(pool, ignOpt) : null;
+    const ign = identity ? identity.canonicalIgn || identity.ign : '';
+    const ignAliases = identity?.aliases?.length ? identity.aliases : ign ? [ign] : [];
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
     const [rangeStart, rangeEnd] = dateRangeParams(start, end);
@@ -530,23 +542,23 @@ module.exports = function pmCommands(ctx) {
       let q = `
         SELECT winner_ign, loser_ign, final_score, fight_type, fight_number, created_at
         FROM scores s
-        WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1)
+        WHERE (LOWER(s.winner_ign) = ANY($1::text[]) OR LOWER(s.loser_ign) = ANY($1::text[]))
         AND s.is_voided = false
         AND EXISTS (
           SELECT 1
           FROM pm_membership_periods m
-          WHERE LOWER(TRIM(m.ign)) = $1
+          WHERE LOWER(TRIM(m.ign)) = ANY($1::text[])
             AND s.created_at >= m.start_at
             AND (m.end_at IS NULL OR s.created_at <= m.end_at)
         )`;
-      const params = [ign];
+      const params = [ignAliases];
       if (start && end) {
         q += ' AND s.created_at BETWEEN $2 AND $3';
         params.push(rangeStart, rangeEnd);
       }
       q += ' ORDER BY s.created_at ASC, s.id ASC LIMIT 3000';
       const detail = await pool.query(q, params);
-      const embed = buildPmDebugEmbed(ign, detail.rows);
+      const embed = buildPmDebugEmbed(ignAliases, detail.rows);
       const footerParts = [];
       if (detail.rows.length >= 3000) footerParts.push('First 3000 fights in range');
       footerParts.push(start && end ? `Range: ${start} – ${end}` : 'All recorded fights');
@@ -694,19 +706,19 @@ module.exports = function pmCommands(ctx) {
     let sql = `
       SELECT
         COUNT(*)::int AS total,
-        SUM(CASE WHEN LOWER(s.winner_ign) = $1 THEN 1 ELSE 0 END)::int AS wins,
-        SUM(CASE WHEN LOWER(s.loser_ign) = $1 THEN 1 ELSE 0 END)::int AS losses
+         SUM(CASE WHEN LOWER(s.winner_ign) = ANY($1::text[]) THEN 1 ELSE 0 END)::int AS wins,
+         SUM(CASE WHEN LOWER(s.loser_ign) = ANY($1::text[]) THEN 1 ELSE 0 END)::int AS losses
       FROM scores s
-      WHERE (LOWER(s.winner_ign) = $1 OR LOWER(s.loser_ign) = $1)
+      WHERE (LOWER(s.winner_ign) = ANY($1::text[]) OR LOWER(s.loser_ign) = ANY($1::text[]))
       AND s.is_voided = false
       AND EXISTS (
         SELECT 1
         FROM pm_membership_periods m
-        WHERE LOWER(TRIM(m.ign)) = $1
+        WHERE LOWER(TRIM(m.ign)) = ANY($1::text[])
           AND s.created_at >= m.start_at
           AND (m.end_at IS NULL OR s.created_at <= m.end_at)
       )`;
-    const params = [ign];
+    const params = [ignAliases];
     if (start && end) {
       sql += ' AND s.created_at BETWEEN $2 AND $3';
       params.push(rangeStart, rangeEnd);

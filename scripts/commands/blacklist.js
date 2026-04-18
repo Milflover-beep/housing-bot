@@ -1,14 +1,23 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = function blacklistCommands(ctx) {
-  const { pool, requireLevel, isAdminOrOwner, parseDurationToDate, defer, normalizeIgn } = ctx;
+  const {
+    pool,
+    requireLevel,
+    isAdminOrOwner,
+    parseDurationToDate,
+    defer,
+    normalizeIgn,
+    resolveIgnIdentity,
+  } = ctx;
 
   async function handleBlacklist(interaction) {
     await defer(interaction, true);
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
     const reason = interaction.options.getString('reason');
     const duration = interaction.options.getString('duration');
     const expires = parseDurationToDate(duration);
@@ -50,10 +59,12 @@ module.exports = function blacklistCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const r = await pool.query(
-      'SELECT * FROM blacklists WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 20',
-      [ign]
+      'SELECT * FROM blacklists WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 20',
+      [ignAliases]
     );
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No blacklist rows for **${ign}**.` });
@@ -87,10 +98,17 @@ module.exports = function blacklistCommands(ctx) {
       return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
     const ignOpt = interaction.options.getString('ign');
+    const identity = ignOpt ? await resolveIgnIdentity(pool, ignOpt) : null;
+    const ignAliases =
+      identity?.aliases?.length > 0
+        ? identity.aliases
+        : ignOpt
+          ? [normalizeIgn(ignOpt)]
+          : [];
     const q = ignOpt
       ? await pool.query(
-          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 25',
-          [normalizeIgn(ignOpt)]
+          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 25',
+          [ignAliases]
         )
       : await pool.query('SELECT * FROM admin_blacklists ORDER BY id DESC LIMIT 25');
     if (q.rows.length === 0) {

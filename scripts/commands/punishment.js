@@ -15,6 +15,7 @@ module.exports = function punishmentCommands(ctx) {
     requireLevel,
     defer,
     normalizeIgn,
+    resolveIgnIdentity,
     resolveGuildMember,
     parseCooldownToMs,
     formatEvidencePlainUrls,
@@ -315,7 +316,8 @@ module.exports = function punishmentCommands(ctx) {
           '❌ Staff or higher only. If you have the staff role, try again or ask an admin to enable **Server Members Intent** so the bot can see your roles.',
       });
     }
-    const userIgn = normalizeIgn(interaction.options.getString('user-ign'));
+    const userIdentity = await resolveIgnIdentity(pool, interaction.options.getString('user-ign'));
+    const userIgn = userIdentity.canonicalIgn || userIdentity.ign;
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence', true) || '';
     const evidenceTrim = evidence.trim();
@@ -387,7 +389,8 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(member, 4)) {
       return interaction.editReply({ content: '❌ Admin or higher only.' });
     }
-    const userIgn = normalizeIgn(interaction.options.getString('user-ign'));
+    const userIdentity = await resolveIgnIdentity(pool, interaction.options.getString('user-ign'));
+    const userIgn = userIdentity.canonicalIgn || userIdentity.ign;
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence') || '';
     const evidenceTrim = evidence.trim();
@@ -491,17 +494,19 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const [pun, bl] = await Promise.all([
       pool.query(
         `SELECT id, punishment, punishment_details, status, punishment_status, cooldown_raw, reversal_remind_at, created_at
-         FROM punishment_logs WHERE LOWER(user_ign) = $1 ORDER BY created_at DESC LIMIT 25`,
-        [ign]
+         FROM punishment_logs WHERE LOWER(user_ign) = ANY($1::text[]) ORDER BY created_at DESC LIMIT 25`,
+        [ignAliases]
       ),
       pool.query(
         `SELECT id, reason, time_length, blacklist_expires, created_at
-         FROM blacklists WHERE LOWER(ign) = $1 ORDER BY created_at DESC LIMIT 25`,
-        [ign]
+         FROM blacklists WHERE LOWER(ign) = ANY($1::text[]) ORDER BY created_at DESC LIMIT 25`,
+        [ignAliases]
       ),
     ]);
     const merged = [
@@ -549,10 +554,12 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const r = await pool.query(
-      `SELECT * FROM punishment_logs WHERE LOWER(user_ign) = $1 ORDER BY created_at DESC`,
-      [ign]
+      `SELECT * FROM punishment_logs WHERE LOWER(user_ign) = ANY($1::text[]) ORDER BY created_at DESC`,
+      [ignAliases]
     );
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No punishments for **${ign}**.` });

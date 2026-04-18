@@ -13,6 +13,7 @@ module.exports = function tierCommands(ctx) {
     tierListEmbedHeading,
     defer,
     normalizeIgn,
+    resolveIgnIdentity,
     tierResultsLadderSqlParam,
     sqlTierResultsPublicListRowsForLadder,
   } = ctx;
@@ -22,7 +23,9 @@ module.exports = function tierCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const tier = interaction.options.getString('tier').toUpperCase();
     const discordUser = interaction.options.getUser('discord');
     const tester = interaction.user.username;
@@ -35,12 +38,12 @@ module.exports = function tierCommands(ctx) {
     }
 
     const existing = await pool.query(
-      'SELECT * FROM tier_results WHERE LOWER(ign) = $1 ORDER BY id DESC LIMIT 1',
-      [ign]
+      'SELECT * FROM tier_results WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 1',
+      [ignAliases]
     );
 
     /** One active row per IGN: clear any ladder before inserting the new placement. */
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = $1', [ign]);
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
     await pool.query(
       `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
        VALUES ($1, $2, $3, $4, NOW(), $5)`,
@@ -80,15 +83,17 @@ module.exports = function tierCommands(ctx) {
     if (getMemberLevel(interaction.member) < 1 && !hasBoosterOrAbove(interaction.member)) {
       return interaction.editReply({ content: '❌ PM (or booster) or higher required.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const r = await pool.query(
       `SELECT type, tier, ign FROM (
          SELECT DISTINCT ON (LOWER(TRIM(ign))) *
          FROM tier_results
-         WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+         WHERE LOWER(TRIM(ign)) = ANY($1::text[])
          ORDER BY LOWER(TRIM(ign)), id DESC
        ) x`,
-      [ign]
+      [ignAliases]
     );
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No tier results for **${ign}**.` });
@@ -96,10 +101,10 @@ module.exports = function tierCommands(ctx) {
     const row = r.rows[0];
     const hist = await pool.query(
       `SELECT type, tier, rated_at, tester FROM tier_history
-       WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+       WHERE LOWER(TRIM(ign)) = ANY($1::text[])
        ORDER BY rated_at DESC NULLS LAST, id DESC
        LIMIT 18`,
-      [ign]
+      [ignAliases]
     );
     let histRows = hist.rows;
     if (
@@ -136,10 +141,12 @@ module.exports = function tierCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const q = await pool.query(
-      'DELETE FROM tier_results WHERE LOWER(ign) = $1 RETURNING type, tier, ign',
-      [ign]
+      'DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[]) RETURNING type, tier, ign',
+      [ignAliases]
     );
     if (q.rowCount === 0) {
       return interaction.editReply({ content: `❌ No tier entry for **${ign}**.` });
@@ -157,14 +164,18 @@ module.exports = function tierCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers (or higher) only.' });
     }
-    const ign = normalizeIgn(interaction.options.getString('ign'));
+    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
+    const ign = identity.canonicalIgn || identity.ign;
+    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const [tr, th] = await Promise.all([
-      pool.query('SELECT id, type, tier, created_at FROM tier_results WHERE LOWER(ign) = $1 ORDER BY id', [
-        ign,
-      ]),
-      pool.query('SELECT id, type, tier, rated_at FROM tier_history WHERE LOWER(ign) = $1 ORDER BY id', [
-        ign,
-      ]),
+      pool.query(
+        'SELECT id, type, tier, created_at FROM tier_results WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id',
+        [ignAliases]
+      ),
+      pool.query(
+        'SELECT id, type, tier, rated_at FROM tier_history WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id',
+        [ignAliases]
+      ),
     ]);
     const lines = [
       '**tier_results**',
