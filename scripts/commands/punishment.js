@@ -183,7 +183,7 @@ module.exports = function punishmentCommands(ctx) {
           inline: false,
         }
       )
-      .setFooter({ text: 'Accept approves the punishment; Deny voids it.' })
+      .setFooter({ text: 'Accept approves; Deny voids + pings staff; Deny (No Ping) voids silently.' })
       .setTimestamp();
   }
 
@@ -216,7 +216,11 @@ module.exports = function punishmentCommands(ctx) {
       new ButtonBuilder()
         .setCustomId(`pq|den|${queue.id}`)
         .setLabel('Deny')
-        .setStyle(ButtonStyle.Danger)
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`pq|dennp|${queue.id}`)
+        .setLabel('Deny (No Ping)')
+        .setStyle(ButtonStyle.Secondary)
     );
     await interaction.editReply({ embeds: [embed], components: [row] });
   }
@@ -382,6 +386,47 @@ module.exports = function punishmentCommands(ctx) {
       if (!items.length) {
         return interaction.editReply({
           content: `✅ Denied punishment **log #${res.logId}** (queue **#${res.queueId}**). Queue is now empty.`,
+          embeds: [],
+          components: [],
+        });
+      }
+      return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
+    }
+
+    if (parts[1] === 'dennp') {
+      const queueId = parseInt(parts[2], 10);
+      const row = await getQueueRow(queueId);
+      if (!row || !(await canReviewQueueRow(interaction.guild, member, row))) {
+        const visible = await getPendingQueueItems(interaction.guild, member);
+        if (!visible.length) {
+          return interaction.editReply({
+            content: '❌ You cannot deny that item at your hierarchy level. No visible queue items remain.',
+            embeds: [],
+            components: [],
+          });
+        }
+        return renderQueuePage(interaction, visible, 0);
+      }
+      const itemsBefore = await getPendingQueueItems(interaction.guild, member);
+      const idxBefore = Math.max(0, itemsBefore.findIndex((x) => x.queue.id === queueId));
+      const res = await applyDeny(queueId);
+      if (!res.ok) {
+        const items = await getPendingQueueItems(interaction.guild, member);
+        if (!items.length) {
+          return interaction.editReply({
+            content: '❌ That item is no longer pending. Queue is empty.',
+            embeds: [],
+            components: [],
+          });
+        }
+        return renderQueuePage(interaction, items, Math.min(idxBefore, items.length - 1));
+      }
+      const items = await getPendingQueueItems(interaction.guild, member);
+      if (!items.length) {
+        return interaction.editReply({
+          content:
+            `✅ Denied punishment **log #${res.logId}** (queue **#${res.queueId}**) without pinging staff. ` +
+            'Queue is now empty.',
           embeds: [],
           components: [],
         });
