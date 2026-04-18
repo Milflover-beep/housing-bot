@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS reports (
   id                SERIAL PRIMARY KEY,
   ign               TEXT,
   reason            TEXT,
+  evidence_link     TEXT,
   punishment_issued BOOLEAN DEFAULT FALSE,
   discord_user_id   TEXT,
   date_issued       TIMESTAMPTZ DEFAULT NOW()

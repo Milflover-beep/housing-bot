@@ -136,6 +136,20 @@ async function ensureDatabaseSchema(pool) {
         WHERE LOWER(TRIM(m.ign)) = LOWER(TRIM(p.ign))
       )
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id                SERIAL PRIMARY KEY,
+        ign               TEXT,
+        reason            TEXT,
+        evidence_link     TEXT,
+        punishment_issued BOOLEAN DEFAULT FALSE,
+        discord_user_id   TEXT,
+        date_issued       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS evidence_link TEXT;
+    `);
     await ensureApplicationDenials(client);
 
     /** Coerce tier_results.type to single-letter P/E/A (legacy rows used prime/elite/apex words). */
