@@ -837,25 +837,25 @@ module.exports = function punishmentCommands(ctx) {
   const commands = [
     new SlashCommandBuilder()
       .setName('log')
-      .setDescription('Log a punishment and send it to the manager review queue')
+      .setDescription('Log a punishment and send it to the review queue')
       .addStringOption((o) => o.setName('user-ign').setDescription('Player IGN').setRequired(true))
       .addStringOption((o) => o.setName('details').setDescription('Details').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('evidence')
+          .setDescription('Evidence / proof (text or links; shown in /checkqueue)')
+          .setRequired(true)
+      )
       .addStringOption((o) =>
         o
           .setName('punishment-type')
           .setDescription('ban or mute (default: ban)')
           .setRequired(false)
           .addChoices({ name: 'Ban', value: 'ban' }, { name: 'Mute', value: 'mute' })
-      )
-      .addStringOption((o) =>
-        o
-          .setName('evidence')
-          .setDescription('Evidence / proof (text or links; shown in /checkqueue)')
-          .setRequired(true)
       ),
     new SlashCommandBuilder()
       .setName('adminlog')
-      .setDescription('Admin: log punishment with optional custom ban duration (evidence optional)')
+      .setDescription('Admin: log punishment to the review queue (optional custom duration)')
       .addStringOption((o) => o.setName('user-ign').setDescription('Player IGN').setRequired(true))
       .addStringOption((o) => o.setName('details').setDescription('Details').setRequired(true))
       .addStringOption((o) =>
