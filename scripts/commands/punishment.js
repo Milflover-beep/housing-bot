@@ -40,17 +40,23 @@ module.exports = function punishmentCommands(ctx) {
     return parts.join(' ');
   }
 
-  function buildUnbanEmbed(logRow) {
+  function punishmentActionLabel(kind) {
+    return String(kind || '').trim().toLowerCase() === 'mute' ? 'unmute' : 'unban';
+  }
+
+  function buildExpiryActionEmbed(logRow) {
     const issued = logRow.date || logRow.created_at;
     const exp = logRow.reversal_remind_at;
+    const action = punishmentActionLabel(logRow.punishment);
     return new EmbedBuilder()
-      .setTitle('⏰ Punishment expired')
+      .setTitle(`⏰ ${action.toUpperCase()} reminder`)
       .setColor(0xe74c3c)
       .addFields(
         { name: '👤 Player IGN', value: String(logRow.user_ign || '—'), inline: true },
         { name: '👮 Staff Member', value: String(logRow.staff_ign || '—'), inline: true },
         { name: '📅 Date Issued', value: issued ? new Date(issued).toLocaleDateString() : '—', inline: true },
         { name: '⏰ Punishment ended', value: exp ? new Date(exp).toLocaleString() : '—', inline: true },
+        { name: '🔧 Action needed', value: action, inline: true },
         { name: '📄 Details', value: String(logRow.punishment_details || '—').slice(0, 1024) }
       )
       .setFooter({ text: 'Evidence not shown.' })
@@ -66,7 +72,7 @@ module.exports = function punishmentCommands(ctx) {
       process.env.PUNISHMENT_STAFF_ROLE_ID || process.env.STAFF_PING_ROLE_ID || DEFAULT_STAFF_PING_ROLE_ID;
     await ch.send({
       content: `<@&${roleId}>`,
-      embeds: [buildUnbanEmbed(logRow)],
+      embeds: [buildExpiryActionEmbed(logRow)],
     });
   }
 
@@ -458,6 +464,7 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({ content: '❌ **Evidence** is required.' });
     }
     const cooldownRaw = await nextProgressiveCooldownRaw(userIgn);
+    const punishmentType = interaction.options.getString('punishment-type') || 'ban';
     const cooldownMs = parseCooldownToMs(cooldownRaw);
     const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
     const staffIgn = interaction.user.username;
@@ -468,9 +475,18 @@ module.exports = function punishmentCommands(ctx) {
     try {
       const ins = await pool.query(
         `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
-         VALUES ($1, $2, $3, $4, NOW(), $5, NULL, NOW(), 'queued', 'pending_review', $6, $7, false, true)
+         VALUES ($1, $2, $3, $4, NOW(), $5, $6, NOW(), 'queued', 'pending_review', $7, $8, false, true)
          RETURNING id`,
-        [userIgn, staffIgn, evidenceTrim, details, staffDiscordId, cooldownRaw || null, reversalAt]
+        [
+          userIgn,
+          staffIgn,
+          evidenceTrim,
+          details,
+          staffDiscordId,
+          punishmentType,
+          cooldownRaw || null,
+          reversalAt,
+        ]
       );
       const logId = ins.rows[0].id;
 
@@ -558,7 +574,7 @@ module.exports = function punishmentCommands(ctx) {
 
     const ins = await pool.query(
       `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
-       VALUES ($1, $2, $3, $4, NOW(), $5, NULL, NOW(), 'queued', 'pending_review', $6, $7, false, false)
+       VALUES ($1, $2, $3, $4, NOW(), $5, 'ban', NOW(), 'queued', 'pending_review', $6, $7, false, false)
        RETURNING id`,
       [userIgn, staffIgn, evidenceTrim || null, details, staffDiscordId, cooldownRaw, reversalAt]
     );
@@ -824,6 +840,13 @@ module.exports = function punishmentCommands(ctx) {
       .setDescription('Log a punishment and send it to the manager review queue')
       .addStringOption((o) => o.setName('user-ign').setDescription('Player IGN').setRequired(true))
       .addStringOption((o) => o.setName('details').setDescription('Details').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('punishment-type')
+          .setDescription('ban or mute (default: ban)')
+          .setRequired(false)
+          .addChoices({ name: 'Ban', value: 'ban' }, { name: 'Mute', value: 'mute' })
+      )
       .addStringOption((o) =>
         o
           .setName('evidence')

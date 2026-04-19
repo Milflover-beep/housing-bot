@@ -16,8 +16,9 @@ function getPunishmentPingsChannelId() {
 function buildExpiryEmbed(row) {
   const issued = row.date || row.created_at;
   const exp = row.reversal_remind_at;
+  const action = String(row.punishment || '').trim().toLowerCase() === 'mute' ? 'unmute' : 'unban';
   return new EmbedBuilder()
-    .setTitle('⏰ Punishment expired')
+    .setTitle(`⏰ ${action.toUpperCase()} reminder`)
     .setColor(0xe74c3c)
     .addFields(
       { name: '👤 Player IGN', value: String(row.user_ign || '—'), inline: true },
@@ -32,6 +33,7 @@ function buildExpiryEmbed(row) {
         value: exp ? new Date(exp).toLocaleString() : '—',
         inline: true,
       },
+      { name: '🔧 Action needed', value: action, inline: true },
       { name: '📄 Details', value: String(row.punishment_details || '—').slice(0, 1024) }
     )
     .setFooter({ text: 'Evidence not shown.' })
