@@ -5,6 +5,8 @@ const {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
+  PermissionFlagsBits,
+  ChannelType,
 } = require('discord.js');
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 const { syncTierListChannel } = require('../lib/tierListChannelSync');
@@ -33,6 +35,13 @@ module.exports = function coreCommands(ctx) {
     .map((s) => s.trim())
     .filter(Boolean);
   const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+  const NOTE_ROLE_ENV_KEYS = [
+    'BOT_ROLE_PM_ID',
+    'BOT_ROLE_STAFF_ID',
+    'BOT_ROLE_MANAGER_ID',
+    'BOT_ROLE_ADMIN_ID',
+    'BOT_ROLE_HEAD_ADMIN_ID',
+  ];
 
   async function validateMinecraftAccountExists(ign) {
     const key = String(ign || '').trim();
@@ -47,6 +56,80 @@ module.exports = function coreCommands(ctx) {
     if (res.status === 204 || res.status === 404) return { known: true, exists: false };
     if (res.ok) return { known: true, exists: true };
     return { known: false, exists: null };
+  }
+
+  function parseSingleRoleId(envKey) {
+    const ids = parseRoleIdList(envKey);
+    return ids.length > 0 ? ids[0] : null;
+  }
+
+  function sanitizeChannelName(name) {
+    return String(name || 'ticket')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80);
+  }
+
+  async function getOrCreateTicketNotesChannel(interaction) {
+    const guild = interaction.guild;
+    const sourceChannel = interaction.channel;
+    if (!guild || !sourceChannel) return null;
+    const marker = `ticket-notes-for:${sourceChannel.id}`;
+    const existing = guild.channels.cache.find(
+      (c) => c.type === ChannelType.GuildText && c.topic === marker
+    );
+    if (existing) return existing;
+
+    const roleIds = new Set();
+    for (const key of NOTE_ROLE_ENV_KEYS) {
+      for (const id of parseRoleIdList(key)) roleIds.add(id);
+    }
+    if (roleIds.size === 0) return null;
+
+    const parentCategoryId = await resolveChannelCategoryId(sourceChannel, guild);
+    const botId = interaction.client.user?.id;
+    const overwrites = [
+      {
+        id: guild.roles.everyone.id,
+        deny: [PermissionFlagsBits.ViewChannel],
+      },
+    ];
+    if (botId) {
+      overwrites.push({
+        id: botId,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.ManageChannels,
+        ],
+      });
+    }
+    for (const rid of roleIds) {
+      overwrites.push({
+        id: rid,
+        allow: [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ReadMessageHistory,
+        ],
+      });
+    }
+
+    const notesName = `notes-${sanitizeChannelName(sourceChannel.name)}`.slice(0, 100);
+    const created = await guild.channels
+      .create({
+        name: notesName || `notes-${sourceChannel.id}`.slice(0, 100),
+        type: ChannelType.GuildText,
+        parent: parentCategoryId || null,
+        topic: marker,
+        permissionOverwrites: overwrites,
+        reason: 'Auto-created ticket notes channel for /check alerts',
+      })
+      .catch(() => null);
+    return created;
   }
 
   function rankTypeToTicketPrefix(rankType) {
@@ -570,15 +653,31 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
-    if (ticketNotes.length > 0 && interaction.channel?.isTextBased?.()) {
-      const staffRoleMentions = parseRoleIdList('BOT_ROLE_STAFF_ID')
-        .map((id) => `<@&${id}>`)
-        .join(' ');
-      let content = `📝 **TICKET NOTES** ${staffRoleMentions}\n\n${ticketNotes.join('\n\n')}`;
-      if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
-      await interaction.channel
-        .send({ content })
-        .catch((e) => console.warn('check: ticket notes send failed:', e.message));
+    if (ticketNotes.length > 0) {
+      let deliveredToNotesChannel = false;
+      const notesChannel = await getOrCreateTicketNotesChannel(interaction);
+      if (notesChannel?.isTextBased?.()) {
+        const ticketRef = interaction.channelId ? `<#${interaction.channelId}>` : 'unknown';
+        const staffPingRoleId = parseSingleRoleId('PUNISHMENT_STAFF_ROLE_ID');
+        const staffPing = staffPingRoleId ? `<@&${staffPingRoleId}>` : '';
+        let content =
+          `${staffPing}\n📝 **TICKET NOTES ALERT**\n` +
+          `Ticket: ${ticketRef}\n` +
+          `Applicant: <@${discordUser.id}> (\`${ign}\`)\n\n` +
+          `${ticketNotes.join('\n\n')}`;
+        content = content.trim();
+        if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
+        const sent = await notesChannel.send({ content }).catch(() => null);
+        deliveredToNotesChannel = Boolean(sent);
+      }
+
+      if (!deliveredToNotesChannel) {
+        let content = `📝 **TICKET NOTES**\n\n${ticketNotes.join('\n\n')}`;
+        if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
+        await interaction
+          .followUp({ content, flags: MessageFlags.Ephemeral })
+          .catch((e) => console.warn('check: fallback notes followUp failed:', e.message));
+      }
     }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
