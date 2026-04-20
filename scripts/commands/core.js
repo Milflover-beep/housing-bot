@@ -22,6 +22,7 @@ module.exports = function coreCommands(ctx) {
     applicantRoleIds,
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
+    parseRoleIdList,
     resolveGuildMember,
     resolveIgnIdentity,
     clampSideScoreForStats,
@@ -31,6 +32,22 @@ module.exports = function coreCommands(ctx) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+
+  async function validateMinecraftAccountExists(ign) {
+    const key = String(ign || '').trim();
+    if (!key) return { known: false, exists: null };
+    const url = `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(key)}`;
+    let res;
+    try {
+      res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
+    } catch {
+      return { known: false, exists: null };
+    }
+    if (res.status === 204 || res.status === 404) return { known: true, exists: false };
+    if (res.ok) return { known: true, exists: true };
+    return { known: false, exists: null };
+  }
 
   function rankTypeToTicketPrefix(rankType) {
     const key = String(rankType || '').toLowerCase();
@@ -191,6 +208,7 @@ module.exports = function coreCommands(ctx) {
     const identity = await resolveIgnIdentity(pool, ignInput);
     const ign = identity.canonicalIgn || identity.ign;
     const ignAliases = identity.aliases.length ? identity.aliases : [ign];
+    const minecraftValidityPromise = validateMinecraftAccountExists(ignInput);
     const discordUser = interaction.options.getUser('discord', true);
     const discord = discordUser.id;
     const rankType = interaction.options.getString('rank-type');
@@ -312,6 +330,15 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
+    const accountAgeMs = Date.now() - new Date(discordUser.createdAt).getTime();
+    if (accountAgeMs < THREE_MONTHS_MS) {
+      eligible = false;
+      const ts = Math.floor(new Date(discordUser.createdAt).getTime() / 1000);
+      issues.push(
+        `🕒 **Discord account too new** — account created <t:${ts}:F> (<t:${ts}:R>). Minimum age is **3 months**.`
+      );
+    }
+
     const embed = new EmbedBuilder().setTitle(`Check: ${ign}`).setTimestamp();
     let eligible = true;
     const issues = [];
@@ -388,15 +415,19 @@ module.exports = function coreCommands(ctx) {
       );
     }
 
-    /** Alts are never shown on the public reply — ephemeral follow-up to the invoker only. */
-    let altStaffMessage = '';
+    /** Alt/secret notes are posted to ticket notes channel message (non-ephemeral). */
+    const ticketNotes = [];
     if (visibleAltRows.length > 0) {
       const altList = visibleAltRows.map((a) => `\`${a.original_ign}\` → \`${a.alt_ign}\``).join('\n');
-      altStaffMessage = `🔀 **Known alts on file for \`${ign}\`** (only you can see this message):\n${altList}`;
-      if (getMemberLevel(runner) < 2) {
-        altStaffMessage +=
-          '\n\n**Ping a Manager** — include this message (or copy the alt lines above) when you ping them.';
-      }
+      ticketNotes.push(`🚨 **ALT DETECTED** for \`${ign}\`:\n${altList}`);
+    }
+    const secretTemplate = String(process.env.CHECK_SECRET_MESSAGE || '').trim();
+    if (secretTemplate) {
+      const secret = secretTemplate
+        .replace(/\{ign\}/gi, ign)
+        .replace(/\{discord\}/gi, discordUser.id)
+        .replace(/\{mention\}/gi, `<@${discordUser.id}>`);
+      ticketNotes.push(`🚨 **SECRET MESSAGE**\n${secret}`);
     }
 
     /** Full pass: no hard blocks and no public notes. Applicant role only here. */
@@ -472,8 +503,14 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
+    const minecraftValidity = await minecraftValidityPromise;
+    const invalidMinecraftAccountNote =
+      minecraftValidity.known && minecraftValidity.exists === false
+        ? '\n\n⚠️ This IGN does not appear to be a valid Minecraft account (possible typo).'
+        : '';
+
     if (passedCheck) {
-      const ok = `✅ **${ign} is eligible** to apply for ${rankLabel}.\nNo issues found.${roleNote}`;
+      const ok = `✅ **${ign} is eligible** to apply for ${rankLabel}.\nNo issues found.${roleNote}${invalidMinecraftAccountNote}`;
       if (roleNote) {
         embed.setColor(0xffa000);
         embed.setDescription(ok);
@@ -484,11 +521,13 @@ module.exports = function coreCommands(ctx) {
     } else if (!eligible) {
       embed.setColor(0xff1744);
       embed.setDescription(
-        `❌ **${ign} is NOT eligible** to apply for ${rankLabel}.\n\n${issues.join('\n\n')}`
+        `❌ **${ign} is NOT eligible** to apply for ${rankLabel}.\n\n${issues.join('\n\n')}${invalidMinecraftAccountNote}`
       );
     } else {
       embed.setColor(0xffa000);
-      embed.setDescription(`⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}`);
+      embed.setDescription(
+        `⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}${invalidMinecraftAccountNote}`
+      );
     }
 
     let hypixelLevelField;
@@ -531,12 +570,15 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
-    if (altStaffMessage) {
-      let content = altStaffMessage;
+    if (ticketNotes.length > 0 && interaction.channel?.isTextBased?.()) {
+      const staffRoleMentions = parseRoleIdList('BOT_ROLE_STAFF_ID')
+        .map((id) => `<@&${id}>`)
+        .join(' ');
+      let content = `📝 **TICKET NOTES** ${staffRoleMentions}\n\n${ticketNotes.join('\n\n')}`;
       if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
-      await interaction
-        .followUp({ content, flags: MessageFlags.Ephemeral })
-        .catch((e) => console.warn('check: alt staff followUp failed:', e.message));
+      await interaction.channel
+        .send({ content })
+        .catch((e) => console.warn('check: ticket notes send failed:', e.message));
     }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
