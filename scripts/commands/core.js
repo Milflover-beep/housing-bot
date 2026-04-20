@@ -5,8 +5,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
-  PermissionFlagsBits,
-  ChannelType,
 } = require('discord.js');
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 const { syncTierListChannel } = require('../lib/tierListChannelSync');
@@ -24,7 +22,6 @@ module.exports = function coreCommands(ctx) {
     applicantRoleIds,
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
-    parseRoleIdList,
     resolveGuildMember,
     resolveIgnIdentity,
     clampSideScoreForStats,
@@ -35,102 +32,6 @@ module.exports = function coreCommands(ctx) {
     .map((s) => s.trim())
     .filter(Boolean);
   const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
-  const NOTE_ROLE_ENV_KEYS = [
-    'BOT_ROLE_PM_ID',
-    'BOT_ROLE_STAFF_ID',
-    'BOT_ROLE_MANAGER_ID',
-    'BOT_ROLE_ADMIN_ID',
-    'BOT_ROLE_HEAD_ADMIN_ID',
-  ];
-
-  async function validateMinecraftAccountExists(ign) {
-    const key = String(ign || '').trim();
-    if (!key) return { known: false, exists: null };
-    const url = `https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(key)}`;
-    let res;
-    try {
-      res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
-    } catch {
-      return { known: false, exists: null };
-    }
-    if (res.status === 204 || res.status === 404) return { known: true, exists: false };
-    if (res.ok) return { known: true, exists: true };
-    return { known: false, exists: null };
-  }
-
-  function parseSingleRoleId(envKey) {
-    const ids = parseRoleIdList(envKey);
-    return ids.length > 0 ? ids[0] : null;
-  }
-
-  function sanitizeChannelName(name) {
-    return String(name || 'ticket')
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 80);
-  }
-
-  async function getOrCreateTicketNotesChannel(interaction) {
-    const guild = interaction.guild;
-    const sourceChannel = interaction.channel;
-    if (!guild || !sourceChannel) return null;
-    const marker = `ticket-notes-for:${sourceChannel.id}`;
-    const existing = guild.channels.cache.find(
-      (c) => c.type === ChannelType.GuildText && c.topic === marker
-    );
-    if (existing) return existing;
-
-    const roleIds = new Set();
-    for (const key of NOTE_ROLE_ENV_KEYS) {
-      for (const id of parseRoleIdList(key)) roleIds.add(id);
-    }
-    if (roleIds.size === 0) return null;
-
-    const parentCategoryId = await resolveChannelCategoryId(sourceChannel, guild);
-    const botId = interaction.client.user?.id;
-    const overwrites = [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel],
-      },
-    ];
-    if (botId) {
-      overwrites.push({
-        id: botId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageChannels,
-        ],
-      });
-    }
-    for (const rid of roleIds) {
-      overwrites.push({
-        id: rid,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-        ],
-      });
-    }
-
-    const notesName = `notes-${sanitizeChannelName(sourceChannel.name)}`.slice(0, 100);
-    const created = await guild.channels
-      .create({
-        name: notesName || `notes-${sourceChannel.id}`.slice(0, 100),
-        type: ChannelType.GuildText,
-        parent: parentCategoryId || null,
-        topic: marker,
-        permissionOverwrites: overwrites,
-        reason: 'Auto-created ticket notes channel for /check alerts',
-      })
-      .catch(() => null);
-    return created;
-  }
 
   function rankTypeToTicketPrefix(rankType) {
     const key = String(rankType || '').toLowerCase();
@@ -291,7 +192,6 @@ module.exports = function coreCommands(ctx) {
     const identity = await resolveIgnIdentity(pool, ignInput);
     const ign = identity.canonicalIgn || identity.ign;
     const ignAliases = identity.aliases.length ? identity.aliases : [ign];
-    const minecraftValidityPromise = validateMinecraftAccountExists(ignInput);
     const discordUser = interaction.options.getUser('discord', true);
     const discord = discordUser.id;
     const rankType = interaction.options.getString('rank-type');
@@ -498,19 +398,15 @@ module.exports = function coreCommands(ctx) {
       );
     }
 
-    /** Alt/secret notes are posted to ticket notes channel message (non-ephemeral). */
-    const ticketNotes = [];
+    /** Alts are never shown on the public reply — ephemeral follow-up to the invoker only. */
+    let altStaffMessage = '';
     if (visibleAltRows.length > 0) {
       const altList = visibleAltRows.map((a) => `\`${a.original_ign}\` → \`${a.alt_ign}\``).join('\n');
-      ticketNotes.push(`🚨 **ALT DETECTED** for \`${ign}\`:\n${altList}`);
-    }
-    const secretTemplate = String(process.env.CHECK_SECRET_MESSAGE || '').trim();
-    if (secretTemplate) {
-      const secret = secretTemplate
-        .replace(/\{ign\}/gi, ign)
-        .replace(/\{discord\}/gi, discordUser.id)
-        .replace(/\{mention\}/gi, `<@${discordUser.id}>`);
-      ticketNotes.push(`🚨 **SECRET MESSAGE**\n${secret}`);
+      altStaffMessage = `🔀 **Known alts on file for \`${ign}\`** (only you can see this message):\n${altList}`;
+      if (getMemberLevel(runner) < 2) {
+        altStaffMessage +=
+          '\n\n**Ping a Manager** — include this message (or copy the alt lines above) when you ping them.';
+      }
     }
 
     /** Full pass: no hard blocks and no public notes. Applicant role only here. */
@@ -586,14 +482,8 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
-    const minecraftValidity = await minecraftValidityPromise;
-    const invalidMinecraftAccountNote =
-      minecraftValidity.known && minecraftValidity.exists === false
-        ? '\n\n⚠️ This IGN does not appear to be a valid Minecraft account (possible typo).'
-        : '';
-
     if (passedCheck) {
-      const ok = `✅ **${ign} is eligible** to apply for ${rankLabel}.\nNo issues found.${roleNote}${invalidMinecraftAccountNote}`;
+      const ok = `✅ **${ign} is eligible** to apply for ${rankLabel}.\nNo issues found.${roleNote}`;
       if (roleNote) {
         embed.setColor(0xffa000);
         embed.setDescription(ok);
@@ -604,13 +494,11 @@ module.exports = function coreCommands(ctx) {
     } else if (!eligible) {
       embed.setColor(0xff1744);
       embed.setDescription(
-        `❌ **${ign} is NOT eligible** to apply for ${rankLabel}.\n\n${issues.join('\n\n')}${invalidMinecraftAccountNote}`
+        `❌ **${ign} is NOT eligible** to apply for ${rankLabel}.\n\n${issues.join('\n\n')}`
       );
     } else {
       embed.setColor(0xffa000);
-      embed.setDescription(
-        `⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}${invalidMinecraftAccountNote}`
-      );
+      embed.setDescription(`⚠️ **${ign} is eligible** but has notes:\n\n${issues.join('\n\n')}`);
     }
 
     let hypixelLevelField;
@@ -653,31 +541,12 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
-    if (ticketNotes.length > 0) {
-      let deliveredToNotesChannel = false;
-      const notesChannel = await getOrCreateTicketNotesChannel(interaction);
-      if (notesChannel?.isTextBased?.()) {
-        const ticketRef = interaction.channelId ? `<#${interaction.channelId}>` : 'unknown';
-        const staffPingRoleId = parseSingleRoleId('PUNISHMENT_STAFF_ROLE_ID');
-        const staffPing = staffPingRoleId ? `<@&${staffPingRoleId}>` : '';
-        let content =
-          `${staffPing}\n📝 **TICKET NOTES ALERT**\n` +
-          `Ticket: ${ticketRef}\n` +
-          `Applicant: <@${discordUser.id}> (\`${ign}\`)\n\n` +
-          `${ticketNotes.join('\n\n')}`;
-        content = content.trim();
-        if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
-        const sent = await notesChannel.send({ content }).catch(() => null);
-        deliveredToNotesChannel = Boolean(sent);
-      }
-
-      if (!deliveredToNotesChannel) {
-        let content = `📝 **TICKET NOTES**\n\n${ticketNotes.join('\n\n')}`;
-        if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
-        await interaction
-          .followUp({ content, flags: MessageFlags.Ephemeral })
-          .catch((e) => console.warn('check: fallback notes followUp failed:', e.message));
-      }
+    if (altStaffMessage) {
+      let content = altStaffMessage;
+      if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
+      await interaction
+        .followUp({ content, flags: MessageFlags.Ephemeral })
+        .catch((e) => console.warn('check: alt staff followUp failed:', e.message));
     }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
