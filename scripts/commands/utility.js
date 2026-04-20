@@ -31,6 +31,28 @@ function loadWhoisOverrides() {
 module.exports = function utilityCommands(ctx) {
   const { pool, requireLevel, isOwner, defer, normalizeIgn } = ctx;
 
+  const FIND_TARGETS = [
+    { key: 'blacklists', label: 'blacklists', sql: 'SELECT id, ign FROM blacklists WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+    { key: 'tier_results', label: 'tier_results', sql: 'SELECT id, ign, type, tier FROM tier_results WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+    {
+      key: 'scores',
+      label: 'scores',
+      sql: 'SELECT id, winner_ign, loser_ign FROM scores WHERE LOWER(winner_ign) LIKE $1 OR LOWER(loser_ign) LIKE $1 LIMIT 10',
+    },
+    {
+      key: 'punishment_logs',
+      label: 'punishment_logs',
+      sql: 'SELECT id, user_ign, staff_ign, punishment_status FROM punishment_logs WHERE LOWER(user_ign) LIKE $1 LIMIT 10',
+    },
+    { key: 'reports', label: 'reports', sql: 'SELECT id, ign, punishment_issued FROM reports WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+    {
+      key: 'alts',
+      label: 'alts',
+      sql: 'SELECT id, original_ign, alt_ign FROM alts WHERE LOWER(original_ign) LIKE $1 OR LOWER(alt_ign) LIKE $1 LIMIT 10',
+    },
+    { key: 'uuid_registry', label: 'uuid_registry', sql: 'SELECT id, ign, uuid FROM uuid_registry WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+  ];
+
   async function handleUpdate(interaction) {
     await defer(interaction, false);
     if (!requireLevel(interaction.member, 4)) {
@@ -81,21 +103,24 @@ module.exports = function utilityCommands(ctx) {
 
   async function handleFind(interaction) {
     await defer(interaction, true);
-    if (!isOwner(interaction.user.id)) {
-      return interaction.editReply({ content: '❌ Bot owner only.' });
+    if (!requireLevel(interaction.member, 4)) {
+      return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
     const q = `%${normalizeIgn(interaction.options.getString('query'))}%`;
-    const tables = [
-      ['blacklists', 'SELECT id, ign FROM blacklists WHERE LOWER(ign) LIKE $1 LIMIT 10'],
-      ['tier_results', 'SELECT id, ign FROM tier_results WHERE LOWER(ign) LIKE $1 LIMIT 10'],
-      ['scores', 'SELECT id, winner_ign, loser_ign FROM scores WHERE LOWER(winner_ign) LIKE $1 OR LOWER(loser_ign) LIKE $1 LIMIT 10'],
-    ];
+    const target = interaction.options.getString('target') || 'all';
+    const tables = target === 'all' ? FIND_TARGETS : FIND_TARGETS.filter((t) => t.key === target);
+    const available = FIND_TARGETS.map((t) => `\`${t.key}\``).join(', ');
     const lines = [];
-    for (const [name, sql] of tables) {
-      const r = await pool.query(sql, [q]);
-      if (r.rows.length) lines.push(`**${name}**: ${r.rows.map((row) => JSON.stringify(row)).join('; ')}`);
+    for (const table of tables) {
+      const r = await pool.query(table.sql, [q]);
+      if (r.rows.length) {
+        lines.push(`**${table.label}**: ${r.rows.map((row) => JSON.stringify(row)).join('; ')}`);
+      }
     }
-    await interaction.editReply({ content: lines.join('\n').slice(0, 3900) || 'No hits.' });
+    const body = lines.join('\n').slice(0, 3700) || 'No hits.';
+    await interaction.editReply({
+      content: `Searchable targets: ${available}\n${body}`,
+    });
   }
 
   async function handleErrorcheck(interaction) {
@@ -164,8 +189,24 @@ module.exports = function utilityCommands(ctx) {
       .addStringOption((o) => o.setName('new-ign').setDescription('New IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('find')
-      .setDescription('Search a database table for IGN entries (Bot Owner Only)')
-      .addStringOption((o) => o.setName('query').setDescription('Substring to search').setRequired(true)),
+      .setDescription('Search IGN entries across moderation/player tables (Admin+)')
+      .addStringOption((o) => o.setName('query').setDescription('Substring to search').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('target')
+          .setDescription('What table/group to search (default: all)')
+          .setRequired(false)
+          .addChoices(
+            { name: 'All', value: 'all' },
+            { name: 'blacklists', value: 'blacklists' },
+            { name: 'tier_results', value: 'tier_results' },
+            { name: 'scores', value: 'scores' },
+            { name: 'punishment_logs', value: 'punishment_logs' },
+            { name: 'reports', value: 'reports' },
+            { name: 'alts', value: 'alts' },
+            { name: 'uuid_registry', value: 'uuid_registry' }
+          )
+      ),
     new SlashCommandBuilder()
       .setName('errorcheck')
       .setDescription('Check all databases for potential errors and typos (Bot Owner Only)'),
