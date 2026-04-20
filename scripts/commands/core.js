@@ -313,6 +313,10 @@ module.exports = function coreCommands(ctx) {
       }
     }
 
+    const embed = new EmbedBuilder().setTitle(`Check: ${ign}`).setTimestamp();
+    let eligible = true;
+    const issues = [];
+
     const accountAgeMs = Date.now() - new Date(discordUser.createdAt).getTime();
     if (accountAgeMs < THREE_MONTHS_MS) {
       eligible = false;
@@ -321,10 +325,6 @@ module.exports = function coreCommands(ctx) {
         `🕒 **Discord account too new** — account created <t:${ts}:F> (<t:${ts}:R>). Minimum age is **3 months**.`
       );
     }
-
-    const embed = new EmbedBuilder().setTitle(`Check: ${ign}`).setTimestamp();
-    let eligible = true;
-    const issues = [];
 
     /** API/config failures: do not block eligibility; PM checks skip Hypixel entirely. */
     let hypixelDegradedNote = '';
