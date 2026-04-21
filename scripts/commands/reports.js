@@ -35,7 +35,7 @@ module.exports = function reportsCommands(ctx) {
   }
 
   async function handleAcceptreport(interaction) {
-    await defer(interaction, false);
+    await defer(interaction, true);
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
