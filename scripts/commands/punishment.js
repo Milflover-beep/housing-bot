@@ -550,6 +550,7 @@ module.exports = function punishmentCommands(ctx) {
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence') || '';
     const evidenceTrim = evidence.trim();
+    const punishmentType = interaction.options.getString('punishment-type') || 'ban';
     const banDurationOpt = interaction.options.getString('ban-duration');
     let cooldownRaw =
       banDurationOpt && String(banDurationOpt).trim() ? String(banDurationOpt).trim() : '';
@@ -574,9 +575,9 @@ module.exports = function punishmentCommands(ctx) {
 
     const ins = await pool.query(
       `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
-       VALUES ($1, $2, $3, $4, NOW(), $5, 'ban', NOW(), 'queued', 'pending_review', $6, $7, false, false)
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6, NOW(), 'queued', 'pending_review', $7, $8, false, false)
        RETURNING id`,
-      [userIgn, staffIgn, evidenceTrim || null, details, staffDiscordId, cooldownRaw, reversalAt]
+      [userIgn, staffIgn, evidenceTrim || null, details, staffDiscordId, punishmentType, cooldownRaw, reversalAt]
     );
     const logId = ins.rows[0].id;
     const summary = (details || '').slice(0, 200);
@@ -858,6 +859,13 @@ module.exports = function punishmentCommands(ctx) {
       .setDescription('Admin: log punishment to the review queue (optional custom duration)')
       .addStringOption((o) => o.setName('user-ign').setDescription('Player IGN').setRequired(true))
       .addStringOption((o) => o.setName('details').setDescription('Details').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('punishment-type')
+          .setDescription('ban or mute (default: ban)')
+          .setRequired(false)
+          .addChoices({ name: 'Ban', value: 'ban' }, { name: 'Mute', value: 'mute' })
+      )
       .addStringOption((o) =>
         o
           .setName('ban-duration')
