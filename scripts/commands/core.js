@@ -83,6 +83,20 @@ module.exports = function coreCommands(ctx) {
     return Number(n).toFixed(digits);
   }
 
+  function formatRelativeFromNow(targetDate) {
+    const t = new Date(targetDate).getTime();
+    const ms = t - Date.now();
+    if (!Number.isFinite(ms)) return 'unknown';
+    if (ms <= 0) return 'expired';
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (days > 0) return `in ${days}d ${hours}h`;
+    if (hours > 0) return `in ${hours}h ${minutes}m`;
+    return `in ${Math.max(1, minutes)}m`;
+  }
+
   function buildFightHistoryDebugFields(ignKeys, rows) {
     const keys = Array.isArray(ignKeys) ? ignKeys : [String(ignKeys || '').toLowerCase()];
     const byType = {};
@@ -381,7 +395,9 @@ module.exports = function coreCommands(ctx) {
       eligible = false;
       const d = denialRows.rows[0];
       const ts = Math.floor(new Date(d.cooldown_until).getTime() / 1000);
-      issues.push(`⏳ **Application cooldown** — ends <t:${ts}:F> (<t:${ts}:R>)`);
+      issues.push(
+        `⏳ **Application cooldown** — ends <t:${ts}:F> (${formatRelativeFromNow(d.cooldown_until)})`
+      );
     }
 
     /** Latest tier row per ladder (Prime / Elite / Apex). Higher tiers may `/check` for lower ladders without a warning. */
