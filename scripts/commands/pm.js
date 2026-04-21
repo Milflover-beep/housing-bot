@@ -533,6 +533,8 @@ module.exports = function pmCommands(ctx) {
     const ignAliases = identity?.aliases?.length ? identity.aliases : ign ? [ign] : [];
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
+    const ranking = interaction.options.getString('ranking') || 'best';
+    const isWorstRanking = ranking === 'worst';
     const [rangeStart, rangeEnd] = dateRangeParams(start, end);
 
     if (debug) {
@@ -575,6 +577,7 @@ module.exports = function pmCommands(ctx) {
       }
 
       const leaderboardSize = start && end ? 3 : 6;
+      const orderClause = isWorstRanking ? 'fights ASC, pm.ign ASC' : 'fights DESC, pm.ign ASC';
       const top = await pool.query(
         `WITH pm AS (
            SELECT LOWER(TRIM(ign)) AS ign FROM pm_list
@@ -604,11 +607,13 @@ module.exports = function pmCommands(ctx) {
                  AND (m.end_at IS NULL OR s.created_at <= m.end_at)
              )
          )
-         SELECT p.ign, COUNT(*)::int AS fights
-         FROM participations p
-         INNER JOIN pm ON pm.ign = p.ign
-         GROUP BY p.ign
-         ORDER BY fights DESC
+         SELECT
+           pm.ign,
+           COALESCE(COUNT(participations.ign), 0)::int AS fights
+         FROM pm
+         LEFT JOIN participations ON participations.ign = pm.ign
+         GROUP BY pm.ign
+         ORDER BY ${orderClause}
          LIMIT $3`,
         [rangeStart, rangeEnd, leaderboardSize]
       );
@@ -628,7 +633,9 @@ module.exports = function pmCommands(ctx) {
       );
 
       const fields = [];
-      const medals = ['🥇', '🥈', '🥉', '🏅', '🏅'];
+      const medals = isWorstRanking
+        ? ['🧊', '🧊', '🧊', '▫️', '▫️', '▫️']
+        : ['🥇', '🥈', '🥉', '🏅', '🏅', '🏅'];
       for (let i = 0; i < leaderboardSize; i++) {
         const row = top.rows[i];
         if (!row) {
@@ -693,9 +700,13 @@ module.exports = function pmCommands(ctx) {
           : '**Date Range:** All time';
 
       const embed = new EmbedBuilder()
-        .setTitle('📊 Top PM Fight Statistics')
+        .setTitle(isWorstRanking ? '📉 Lowest PM Fight Activity' : '📊 Top PM Fight Statistics')
         .setColor(0x1abc9c)
-        .setDescription(`Top ${leaderboardSize} fighters with most fights\n\n${rangeLine}`)
+        .setDescription(
+          isWorstRanking
+            ? `Bottom ${leaderboardSize} PMs by fight count\n\n${rangeLine}`
+            : `Top ${leaderboardSize} fighters with most fights\n\n${rangeLine}`
+        )
         .addFields(fields)
         .setTimestamp();
 
@@ -808,6 +819,16 @@ module.exports = function pmCommands(ctx) {
       )
       .addStringOption((o) =>
         o.setName('end-date').setDescription('ISO date end (optional)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o
+          .setName('ranking')
+          .setDescription('Leaderboard direction when ign is omitted')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Best (most fights)', value: 'best' },
+            { name: 'Worst (fewest fights)', value: 'worst' }
+          )
       )
       .addBooleanOption((o) =>
         o
