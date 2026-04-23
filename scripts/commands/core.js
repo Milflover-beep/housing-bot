@@ -22,6 +22,9 @@ module.exports = function coreCommands(ctx) {
     applicantRoleIds,
     applicantRoleName,
     applicantRoleIdEnvPresentButInvalid,
+    parseRoleIdList,
+    hasRoleId,
+    hasRoleName,
     resolveGuildMember,
     resolveIgnIdentity,
     clampSideScoreForStats,
@@ -40,6 +43,14 @@ module.exports = function coreCommands(ctx) {
     if (key === 'apex') return 'apex';
     if (key === 'pm') return 'PM';
     return null;
+  }
+
+  function hasBoosterRole(member) {
+    const boosterIds = parseRoleIdList('BOT_ROLE_BOOSTER_ID');
+    if (boosterIds.length > 0) return boosterIds.some((id) => hasRoleId(member, id));
+    const boosterName = String(process.env.BOT_ROLE_BOOSTER_NAME || '').trim();
+    if (boosterName) return hasRoleName(member, boosterName);
+    return false;
   }
 
   async function resolveChannelCategoryId(channel, guild) {
@@ -969,13 +980,16 @@ module.exports = function coreCommands(ctx) {
 
   async function handleHelp(interaction) {
     await defer(interaction, false);
-    const roleId = process.env.HELP_STAFF_ROLE_ID;
+    const member = await resolveGuildMember(interaction);
+    if (!member || !hasBoosterRole(member)) {
+      return interaction.editReply({ content: '❌ Booster role only.' });
+    }
+    const roleId = parseRoleIdList('PUNISHMENT_STAFF_ROLE_ID')[0];
     const ch = process.env.HELP_CHANNEL_ID;
     let desc = 'If you need help, contact a staff member.';
-    if (roleId) desc += `\n${roleId ? `<@&${roleId}>` : ''}`;
     if (ch) desc += `\nSee <#${ch}> for more info.`;
     const embed = new EmbedBuilder().setTitle('Help').setColor(0x57f287).setDescription(desc);
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ content: roleId ? `<@&${roleId}>` : '', embeds: [embed] });
   }
 
   const commands = [
