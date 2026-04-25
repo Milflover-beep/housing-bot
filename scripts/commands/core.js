@@ -989,7 +989,15 @@ module.exports = function coreCommands(ctx) {
     let desc = 'If you need help, contact a staff member.';
     if (ch) desc += `\nSee <#${ch}> for more info.`;
     const embed = new EmbedBuilder().setTitle('Help').setColor(0x57f287).setDescription(desc);
-    await interaction.editReply({ content: roleId ? `<@&${roleId}>` : '', embeds: [embed] });
+    await interaction.editReply({ embeds: [embed] });
+    if (roleId && interaction.channel?.isTextBased?.()) {
+      await interaction.channel
+        .send({
+          content: `<@&${roleId}> help requested by <@${interaction.user.id}>`,
+          allowedMentions: { roles: [roleId], users: [interaction.user.id] },
+        })
+        .catch((e) => console.warn('help: staff ping send failed:', e?.message || e));
+    }
   }
 
   const commands = [

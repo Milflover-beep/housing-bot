@@ -4,6 +4,16 @@ const { syncTierListChannel } = require('../lib/tierListChannelSync');
 const RANK_LETTER = { prime: 'P', elite: 'E', apex: 'A' };
 const WEEKS = { prime: 1, elite: 2, apex: 3 };
 const RANK_LABEL = { prime: 'Prime', elite: 'Elite', apex: 'Apex', pm: 'PM' };
+const DEFAULT_COOLDOWN_MS = {
+  prime: 7 * 24 * 60 * 60 * 1000,
+  elite: 14 * 24 * 60 * 60 * 1000,
+  apex: 21 * 24 * 60 * 60 * 1000,
+};
+const BOOSTER_COOLDOWN_MS = {
+  prime: 4 * 24 * 60 * 60 * 1000,
+  elite: 7 * 24 * 60 * 60 * 1000,
+  apex: Math.floor(10.5 * 24 * 60 * 60 * 1000),
+};
 const DEFAULT_DENY_ACCEPT_RESULTS_CHANNEL_ID = '1439866722038452314';
 
 module.exports = function applicationsCommands(ctx) {
@@ -46,6 +56,14 @@ module.exports = function applicationsCommands(ctx) {
   function acceptPingRoleId() {
     const fromAccept = parseRoleIdList('ACCEPT_PING_ROLE_ID');
     return fromAccept.length > 0 ? fromAccept[0] : null;
+  }
+
+  function isBoosterMember(member) {
+    if (!member?.roles?.cache) return false;
+    const boosterIds = parseRoleIdList('BOT_ROLE_BOOSTER_ID');
+    if (boosterIds.length > 0) return boosterIds.some((id) => member.roles.cache.has(id));
+    const boosterName = String(process.env.BOT_ROLE_BOOSTER_NAME || '').trim();
+    return boosterName ? member.roles.cache.some((r) => r.name === boosterName) : false;
   }
 
   async function sendApplicationResultLog(interaction, data) {
@@ -122,22 +140,30 @@ module.exports = function applicationsCommands(ctx) {
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
     const letter = RANK_LETTER[typeStr];
-    const weeks = WEEKS[typeStr];
     const customCooldownRaw = interaction.options.getString('cooldown');
     const customCooldownMs = parseCooldownToMs(customCooldownRaw);
+    let applicantMember = null;
+    try {
+      applicantMember = await interaction.guild.members.fetch(discordUser.id);
+    } catch {}
+    const boosterReduced = isBoosterMember(applicantMember);
+    const baseCooldownMs = boosterReduced ? BOOSTER_COOLDOWN_MS[typeStr] : DEFAULT_COOLDOWN_MS[typeStr];
     if (customCooldownRaw && customCooldownMs === undefined) {
       return interaction.editReply({
         content:
           '❌ Invalid cooldown format. Use one number and one unit: `d` days, `h` hours, `m` minutes (e.g. `3d`, `12h`, `30m`).',
       });
     }
-    const cooldownMs =
-      customCooldownMs != null ? customCooldownMs : weeks * 7 * 24 * 60 * 60 * 1000;
+    const cooldownMs = customCooldownMs != null ? customCooldownMs : baseCooldownMs;
     const cooldownUntil = new Date(Date.now() + cooldownMs);
+    const boosterCooldownLabel =
+      typeStr === 'apex' ? '1.5 weeks' : typeStr === 'elite' ? '1 week' : '4 days';
     const cooldownSummary =
       customCooldownMs != null
         ? `custom duration **${customCooldownRaw.trim()}**`
-        : `${weeks} week${weeks > 1 ? 's' : ''}`;
+        : boosterReduced
+          ? `booster reduced duration **${boosterCooldownLabel}**`
+          : `${WEEKS[typeStr]} week${WEEKS[typeStr] > 1 ? 's' : ''}`;
 
     await pool.query(
       `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
@@ -151,10 +177,9 @@ module.exports = function applicationsCommands(ctx) {
     );
 
     try {
-      const member = await interaction.guild.members.fetch(discordUser.id);
-      await removeApplicantRole(interaction.guild, member);
+      if (applicantMember) await removeApplicantRole(interaction.guild, applicantMember);
     } catch (e) {
-      console.warn('deny: applicant role:', e.message);
+      console.warn('deny: applicant role:', e?.message || e);
     }
 
     await interaction.editReply({
