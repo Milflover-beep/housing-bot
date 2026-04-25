@@ -981,8 +981,8 @@ module.exports = function coreCommands(ctx) {
   async function handleHelp(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!member || !hasBoosterRole(member)) {
-      return interaction.editReply({ content: '❌ Booster role only.' });
+    if (!member || (!hasBoosterRole(member) && getMemberLevel(member) < 4)) {
+      return interaction.editReply({ content: '❌ Booster or Admin+ only.' });
     }
     const roleId = parseRoleIdList('PUNISHMENT_STAFF_ROLE_ID')[0];
     const ch = process.env.HELP_CHANNEL_ID;
