@@ -985,19 +985,23 @@ module.exports = function coreCommands(ctx) {
       return interaction.editReply({ content: '❌ Booster or Admin+ only.' });
     }
     const roleId = parseRoleIdList('PUNISHMENT_STAFF_ROLE_ID')[0];
-    const ch = process.env.HELP_CHANNEL_ID;
-    let desc = '';
-    if (ch) desc += `\nSee <#${ch}> for more info.`;
-    const embed = new EmbedBuilder().setTitle('Help').setColor(0x57f287).setDescription(desc);
-    await interaction.editReply({ embeds: [embed] });
-    if (roleId && interaction.channel?.isTextBased?.()) {
-      await interaction.channel
-        .send({
-          content: `<@&${roleId}> help requested by <@${interaction.user.id}>`,
-          allowedMentions: { roles: [roleId], users: [interaction.user.id] },
-        })
-        .catch((e) => console.warn('help: staff ping send failed:', e?.message || e));
+    if (!roleId) {
+      return interaction.editReply({
+        content: '❌ PUNISHMENT_STAFF_ROLE_ID is not configured.',
+      });
     }
+    if (!interaction.channel?.isTextBased?.()) {
+      return interaction.editReply({ content: '❌ Run this in a text channel.' });
+    }
+    await interaction.channel
+      .send({
+        content: `<@&${roleId}> help requested by <@${interaction.user.id}>`,
+        allowedMentions: { roles: [roleId], users: [interaction.user.id] },
+      })
+      .catch((e) => {
+        throw new Error(`help ping failed: ${String(e?.message || e)}`);
+      });
+    await interaction.editReply({ content: '✅ Staff has been pinged.' });
   }
 
   const commands = [
