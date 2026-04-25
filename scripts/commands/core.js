@@ -986,7 +986,7 @@ module.exports = function coreCommands(ctx) {
     }
     const roleId = parseRoleIdList('PUNISHMENT_STAFF_ROLE_ID')[0];
     const ch = process.env.HELP_CHANNEL_ID;
-    let desc = 'If you need help, contact a staff member.';
+    let desc = '';
     if (ch) desc += `\nSee <#${ch}> for more info.`;
     const embed = new EmbedBuilder().setTitle('Help').setColor(0x57f287).setDescription(desc);
     await interaction.editReply({ embeds: [embed] });
