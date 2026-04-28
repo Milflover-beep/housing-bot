@@ -13,6 +13,7 @@ const modules = [
   require('./pm'),
   require('./punishment'),
   require('./reports'),
+  require('./staffActivity'),
   require('./fights'),
   require('./proxies'),
   require('./uuid'),

@@ -156,6 +156,26 @@ async function ensureDatabaseSchema(pool) {
     await client.query(`
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS evidence_link TEXT;
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS staff_activity_logs (
+        id               SERIAL PRIMARY KEY,
+        staff_discord_id TEXT NOT NULL,
+        command_name     TEXT NOT NULL,
+        guild_id         TEXT,
+        channel_id       TEXT,
+        category_id      TEXT,
+        status           TEXT DEFAULT 'ok',
+        created_at       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS staff_activity_logs_staff_created_idx
+      ON staff_activity_logs (staff_discord_id, created_at DESC)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS staff_activity_logs_created_idx
+      ON staff_activity_logs (created_at DESC)
+    `);
     await ensureApplicationDenials(client);
 
     /** Coerce tier_results.type to single-letter P/E/A (legacy rows used prime/elite/apex words). */

@@ -118,6 +118,17 @@ CREATE TABLE IF NOT EXISTS role_blacklists (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS staff_activity_logs (
+  id               SERIAL PRIMARY KEY,
+  staff_discord_id TEXT NOT NULL,
+  command_name     TEXT NOT NULL,
+  guild_id         TEXT,
+  channel_id       TEXT,
+  category_id      TEXT,
+  status           TEXT DEFAULT 'ok',
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS scores (
   id          SERIAL PRIMARY KEY,
   winner_ign  TEXT,

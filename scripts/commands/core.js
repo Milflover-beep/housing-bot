@@ -932,6 +932,7 @@ module.exports = function coreCommands(ctx) {
         '`/viewalts`',
         '`/acceptreport`',
         '`/clearcooldown`',
+        '`/staffactivity`',
         '`/addpm`',
         '`/editpm`',
         '`/addalt`',

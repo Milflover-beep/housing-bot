@@ -29,6 +29,43 @@ const client = new Client({ intents });
 
 const { commands, handlers, buttonHandlers } = build();
 
+async function resolveInteractionCategoryId(interaction) {
+  const guild = interaction.guild;
+  const channel = interaction.channel;
+  if (!guild || !channel) return null;
+  if (channel.parentId && guild.channels.cache.get(channel.parentId)?.type === 4) {
+    return channel.parentId;
+  }
+  if (channel.parentId) {
+    const parent =
+      guild.channels.cache.get(channel.parentId) ||
+      (await guild.channels.fetch(channel.parentId).catch(() => null));
+    if (parent?.parentId) return parent.parentId;
+  }
+  return null;
+}
+
+async function logStaffCommandActivity(interaction, status = 'ok') {
+  try {
+    const categoryId = await resolveInteractionCategoryId(interaction);
+    await pool.query(
+      `INSERT INTO staff_activity_logs
+         (staff_discord_id, command_name, guild_id, channel_id, category_id, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+      [
+        interaction.user?.id || null,
+        interaction.commandName || 'unknown',
+        interaction.guildId || null,
+        interaction.channelId || null,
+        categoryId || null,
+        status,
+      ]
+    );
+  } catch (e) {
+    console.warn('staff activity log failed:', e?.message || e);
+  }
+}
+
 client.once(Events.ClientReady, async () => {
   try {
     await ensureDatabaseSchema(pool);
@@ -111,7 +148,9 @@ client.on('interactionCreate', async (interaction) => {
   if (!run) return;
   try {
     await run(interaction);
+    await logStaffCommandActivity(interaction, 'ok');
   } catch (err) {
+    await logStaffCommandActivity(interaction, 'error');
     console.error(`Error in /${interaction.commandName}:`, err);
     if (err?.stack) console.error(err.stack);
     const hint =
