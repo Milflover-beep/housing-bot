@@ -635,21 +635,63 @@ module.exports = function punishmentCommands(ctx) {
       where += ' AND created_at BETWEEN $2 AND $3';
       params.push(new Date(start), new Date(end));
     }
-    const r = await pool.query(
-      `SELECT
-         COUNT(*)::int AS total,
-         SUM(CASE WHEN status = 'active' AND punishment_status = 'active' THEN 1 ELSE 0 END)::int AS accepted,
-         SUM(CASE WHEN punishment_status = 'denied' THEN 1 ELSE 0 END)::int AS denied
-       FROM punishment_logs
-       WHERE ${where}`,
-      params
-    );
+    const activityParams = [staffId];
+    let activityWhere = `staff_discord_id = $1`;
+    if (start && end) {
+      activityWhere += ' AND created_at BETWEEN $2 AND $3';
+      activityParams.push(new Date(start), new Date(end));
+    }
+
+    const ticketCategoryIds = String(process.env.CHECK_RENAME_CATEGORY_IDS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const [r, activitySummary, topCommands] = await Promise.all([
+      pool.query(
+        `SELECT
+           COUNT(*)::int AS total,
+           SUM(CASE WHEN status = 'active' AND punishment_status = 'active' THEN 1 ELSE 0 END)::int AS accepted,
+           SUM(CASE WHEN punishment_status = 'denied' THEN 1 ELSE 0 END)::int AS denied
+         FROM punishment_logs
+         WHERE ${where}`,
+        params
+      ),
+      pool.query(
+        `SELECT
+           COUNT(*)::int AS total_commands,
+           MAX(created_at) AS last_active_at,
+           SUM(CASE WHEN category_id = ANY($${activityParams.length + 1}::text[]) THEN 1 ELSE 0 END)::int AS ticket_commands
+         FROM staff_activity_logs
+         WHERE ${activityWhere}`,
+        [...activityParams, ticketCategoryIds]
+      ),
+      pool.query(
+        `SELECT command_name, COUNT(*)::int AS uses
+         FROM staff_activity_logs
+         WHERE ${activityWhere}
+         GROUP BY command_name
+         ORDER BY uses DESC, command_name ASC
+         LIMIT 8`,
+        activityParams
+      ),
+    ]);
+
     const row = r.rows[0] || {};
     const total = row.total || 0;
     const accepted = row.accepted || 0;
     const denied = row.denied || 0;
     const decided = accepted + denied;
     const accuracy = decided > 0 ? ((accepted / decided) * 100).toFixed(1) : '0.0';
+    const ar = activitySummary.rows[0] || {};
+    const totalCommands = ar.total_commands || 0;
+    const ticketCommands = ar.ticket_commands || 0;
+    const lastActiveTs = ar.last_active_at
+      ? Math.floor(new Date(ar.last_active_at).getTime() / 1000)
+      : null;
+    const topCommandsText = topCommands.rows.length
+      ? topCommands.rows.map((x) => `\`/${x.command_name}\` — ${x.uses}`).join('\n')
+      : '_No command activity in range._';
     const embed = new EmbedBuilder()
       .setTitle(`Staff stats: ${staffUser.username}`)
       .setColor(0x3498db)
@@ -658,7 +700,15 @@ module.exports = function punishmentCommands(ctx) {
         { name: 'Logs made', value: String(total), inline: true },
         { name: 'Accepted', value: String(accepted), inline: true },
         { name: 'Denied', value: String(denied), inline: true },
-        { name: 'Accuracy', value: `${accuracy}%`, inline: true }
+        { name: 'Accuracy', value: `${accuracy}%`, inline: true },
+        { name: 'Commands run', value: String(totalCommands), inline: true },
+        { name: 'Ticket commands', value: String(ticketCommands), inline: true },
+        {
+          name: 'Last command activity',
+          value: lastActiveTs ? `<t:${lastActiveTs}:F> (<t:${lastActiveTs}:R>)` : 'No activity in range',
+          inline: false,
+        },
+        { name: 'Top commands', value: topCommandsText.slice(0, 1024), inline: false }
       )
       .setFooter({ text: start && end ? `Range: ${start} - ${end}` : 'All time' })
       .setTimestamp();
