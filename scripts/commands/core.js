@@ -579,7 +579,7 @@ module.exports = function coreCommands(ctx) {
     if (watchlistRows?.rows?.length > 0) {
       const wl = watchlistRows.rows[0];
       let content =
-        `🚨 **WATCHLIST MATCH for \`${ign}\`** (only you can see this)\n` +
+        `🚨 **WATCHLIST MATCH for \`${ign}\`** — Please ping a manager.\n` +
         `Threat: **${wl.threat_level || 'unknown'}**\n` +
         `Reason: ${wl.reason || '—'}\n` +
         `Entry ID: #${wl.id}`;
