@@ -215,11 +215,12 @@ module.exports = function coreCommands(ctx) {
     let blacklistRows;
     let adminBlacklistRows;
     let altRows;
+    let watchlistRows;
     let allTierRows;
     let hypixelResult;
 
     if (isPmCheck) {
-      [blacklistRows, adminBlacklistRows, altRows] = await Promise.all([
+      [blacklistRows, adminBlacklistRows, altRows, watchlistRows] = await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
            WHERE LOWER(ign) = ANY($1::text[])
@@ -237,13 +238,21 @@ module.exports = function coreCommands(ctx) {
           `SELECT * FROM alts
            WHERE LOWER(original_ign) = ANY($1::text[])
               OR LOWER(alt_ign) = ANY($1::text[])`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT * FROM watchlist
+           WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 10`,
           [ignAliases]
         ),
       ]);
       allTierRows = { rows: [] };
       hypixelResult = { ok: true, pmSkip: true };
     } else {
-      [blacklistRows, adminBlacklistRows, altRows, allTierRows, hypixelResult] = await Promise.all([
+      [blacklistRows, adminBlacklistRows, altRows, watchlistRows, allTierRows, hypixelResult] =
+        await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
            WHERE LOWER(ign) = ANY($1::text[])
@@ -261,6 +270,13 @@ module.exports = function coreCommands(ctx) {
           `SELECT * FROM alts
            WHERE LOWER(original_ign) = ANY($1::text[])
               OR LOWER(alt_ign) = ANY($1::text[])`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT * FROM watchlist
+           WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 10`,
           [ignAliases]
         ),
         pool.query(
@@ -272,7 +288,7 @@ module.exports = function coreCommands(ctx) {
           [ignAliases]
         ),
         fetchNetworkLevelForCheck(hypixelKey, ign),
-      ]);
+        ]);
     }
 
     const adminLevelForAltVisibility = 4;
@@ -558,6 +574,19 @@ module.exports = function coreCommands(ctx) {
       await interaction
         .followUp({ content, flags: MessageFlags.Ephemeral })
         .catch((e) => console.warn('check: alt staff followUp failed:', e.message));
+    }
+
+    if (watchlistRows?.rows?.length > 0) {
+      const wl = watchlistRows.rows[0];
+      let content =
+        `🚨 **WATCHLIST MATCH for \`${ign}\`** (only you can see this)\n` +
+        `Threat: **${wl.threat_level || 'unknown'}**\n` +
+        `Reason: ${wl.reason || '—'}\n` +
+        `Entry ID: #${wl.id}`;
+      if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
+      await interaction
+        .followUp({ content, flags: MessageFlags.Ephemeral })
+        .catch((e) => console.warn('check: watchlist followUp failed:', e.message));
     }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
