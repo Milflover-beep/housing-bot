@@ -44,6 +44,10 @@ module.exports = function punishmentCommands(ctx) {
     return String(kind || '').trim().toLowerCase() === 'mute' ? 'unmute' : 'unban';
   }
 
+  function punishmentTypeLabel(kind) {
+    return String(kind || '').trim().toLowerCase() === 'mute' ? 'Mute' : 'Ban';
+  }
+
   function buildExpiryActionEmbed(logRow) {
     const issued = logRow.date || logRow.created_at;
     const exp = logRow.reversal_remind_at;
@@ -76,15 +80,17 @@ module.exports = function punishmentCommands(ctx) {
     });
   }
 
-  async function nextProgressiveCooldownRaw(userIgn) {
+  async function nextProgressiveCooldownRaw(userIgn, punishmentType = 'ban') {
+    const normalizedType = String(punishmentType || 'ban').trim().toLowerCase() === 'mute' ? 'mute' : 'ban';
     const r = await pool.query(
       `SELECT COUNT(*)::int AS c
        FROM punishment_logs
        WHERE LOWER(TRIM(user_ign)) = LOWER(TRIM($1::text))
+         AND LOWER(COALESCE(TRIM(punishment), 'ban')) = $2
          AND COALESCE(progressive_ban, true) = true
          AND status = 'active'
          AND punishment_status = 'active'`,
-      [userIgn]
+      [userIgn, normalizedType]
     );
     const acceptedCount = r.rows[0]?.c || 0;
     const days = 3 * Math.pow(2, acceptedCount);
@@ -174,7 +180,11 @@ module.exports = function punishmentCommands(ctx) {
 
   function buildQueueReviewEmbed(queue, log, pageNum, totalPages) {
     const evidenceText = formatEvidencePlainUrls(log.evidence);
-    const description = `**Player:** \`${log.user_ign}\`\n**Staff:** ${log.staff_ign || '—'}\n\n**📎 Evidence**\n${evidenceText}`;
+    const description =
+      `**Player:** \`${log.user_ign}\`\n` +
+      `**Type:** ${punishmentTypeLabel(log.punishment)}\n` +
+      `**Staff:** ${log.staff_ign || '—'}\n\n` +
+      `**📎 Evidence**\n${evidenceText}`;
     return new EmbedBuilder()
       .setTitle(`Review queue — ${pageNum}/${totalPages} (queue #${queue.id} · log #${log.id})`)
       .setColor(0x5865f2)
@@ -463,8 +473,8 @@ module.exports = function punishmentCommands(ctx) {
     if (!evidenceTrim) {
       return interaction.editReply({ content: '❌ **Evidence** is required.' });
     }
-    const cooldownRaw = await nextProgressiveCooldownRaw(userIgn);
     const punishmentType = interaction.options.getString('punishment-type') || 'ban';
+    const cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType);
     const cooldownMs = parseCooldownToMs(cooldownRaw);
     const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
     const staffIgn = interaction.user.username;
@@ -519,7 +529,7 @@ module.exports = function punishmentCommands(ctx) {
 
       await interaction.editReply({
         content:
-          `✅ Logged punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
+          `✅ Logged ${punishmentTypeLabel(punishmentType).toLowerCase()} punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
           `Duration set to **${cooldownRaw}** (progressive 3d -> 6d -> 12d...). Use **/checkqueue** (pages + Accept/Deny).`,
       });
     } catch (e) {
@@ -556,7 +566,7 @@ module.exports = function punishmentCommands(ctx) {
       banDurationOpt && String(banDurationOpt).trim() ? String(banDurationOpt).trim() : '';
     let progressiveBan = false;
     if (!cooldownRaw) {
-      cooldownRaw = await nextProgressiveCooldownRaw(userIgn);
+      cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType);
       progressiveBan = true;
     }
     const isPermanentBan = cooldownRaw === '-1';
@@ -609,7 +619,7 @@ module.exports = function punishmentCommands(ctx) {
 
     await interaction.editReply({
       content:
-        `✅ Admin logged punishment **#${logId}** for **${userIgn}** and added it to review queue.\n` +
+        `✅ Admin logged ${punishmentTypeLabel(punishmentType).toLowerCase()} punishment **#${logId}** for **${userIgn}** and added it to review queue.\n` +
         `${
           progressiveBan
             ? 'Auto progressive ban duration'
@@ -748,7 +758,7 @@ module.exports = function punishmentCommands(ctx) {
           } else if (row.status === 'active' && row.punishment_status === 'active') {
             remaining = 'unknown';
           }
-          return `**Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status}) — Remaining: **${remaining}**`;
+          return `**${punishmentTypeLabel(row.punishment)} Punishment** #${row.id} — ${(row.punishment_details || '—').slice(0, 120)} (${row.status}/${row.punishment_status}) — Remaining: **${remaining}**`;
         })(),
       })),
       ...bl.rows.map((row) => ({
@@ -792,7 +802,7 @@ module.exports = function punishmentCommands(ctx) {
     }
     const chunks = r.rows.map(
       (row) =>
-        `**#${row.id}**\nDetails: ${row.punishment_details || '—'}\nEvidence: ${row.evidence || '—'}\nStatus: ${
+        `**#${row.id}** (${punishmentTypeLabel(row.punishment)})\nDetails: ${row.punishment_details || '—'}\nEvidence: ${row.evidence || '—'}\nStatus: ${
           row.status
         } / ${row.punishment_status}\n`
     );
@@ -850,7 +860,7 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
     const r = await pool.query(
-      `SELECT id, user_ign, punishment_details, cooldown_raw, reversal_remind_at, created_at
+      `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
        FROM punishment_logs
        WHERE status = 'active' AND punishment_status = 'active'
          AND (
@@ -873,6 +883,8 @@ module.exports = function punishmentCommands(ctx) {
         remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
       }
       return `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(
+        punishmentTypeLabel(row.punishment)
+      )} — ${(
         row.punishment_details || 'no details'
       ).slice(0, 60)} — remaining: ${remaining}`;
     });

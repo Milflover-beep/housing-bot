@@ -42,7 +42,7 @@ module.exports = function utilityCommands(ctx) {
     {
       key: 'punishment_logs',
       label: 'punishment_logs',
-      sql: 'SELECT id, user_ign, staff_ign, punishment_status FROM punishment_logs WHERE LOWER(user_ign) LIKE $1 LIMIT 10',
+      sql: 'SELECT id, user_ign, staff_ign, punishment, punishment_status FROM punishment_logs WHERE LOWER(user_ign) LIKE $1 LIMIT 10',
     },
     { key: 'reports', label: 'reports', sql: 'SELECT id, ign, punishment_issued FROM reports WHERE LOWER(ign) LIKE $1 LIMIT 10' },
     {
