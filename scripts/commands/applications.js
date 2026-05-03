@@ -246,27 +246,58 @@ module.exports = function applicationsCommands(ctx) {
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
     const tier = interaction.options.getString('tier');
+    const isPmAccept = typeStr === 'pm';
 
-    if (!VALID_TIERS.includes(tier)) {
+    if (!isPmAccept && !tier) {
+      return interaction.editReply({
+        content: '❌ `tier` is required for Prime/Elite/Apex accepts.',
+      });
+    }
+    if (!isPmAccept && !VALID_TIERS.includes(tier)) {
       return interaction.editReply({
         content: `❌ Invalid tier \`${tier}\`. Valid tiers: ${VALID_TIERS.join(', ')}`,
       });
     }
-    const typeLetter = RANK_LETTER[typeStr];
     const tester = interaction.user.username;
-
-    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
-    await pool.query(
-      `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
-       VALUES ($1, $2, $3, $4, NOW(), $5)`,
-      [ign, typeLetter, tier, discordUser.id, tester]
-    );
-    await pool.query(
-      `INSERT INTO tier_history (ign, type, tier, discord_id, rated_at, tester)
-       VALUES ($1, $2, $3, $4, NOW(), $5)`,
-      [ign, typeLetter, tier, discordUser.id, tester]
-    );
-    await syncTierListChannel(interaction.client, pool);
+    if (isPmAccept) {
+      await pool.query(
+        `INSERT INTO pm_list (ign, created_at)
+         SELECT $1, NOW()
+         WHERE NOT EXISTS (
+           SELECT 1 FROM pm_list WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+         )`,
+        [ign]
+      );
+      try {
+        await pool.query(
+          `INSERT INTO pm_membership_periods (ign, start_at, created_at)
+           SELECT $1, NOW(), NOW()
+           WHERE NOT EXISTS (
+             SELECT 1
+             FROM pm_membership_periods
+             WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+               AND end_at IS NULL
+           )`,
+          [ign]
+        );
+      } catch (e) {
+        if (e && e.code !== '42P01') throw e;
+      }
+    } else {
+      const typeLetter = RANK_LETTER[typeStr];
+      await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
+      await pool.query(
+        `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
+         VALUES ($1, $2, $3, $4, NOW(), $5)`,
+        [ign, typeLetter, tier, discordUser.id, tester]
+      );
+      await pool.query(
+        `INSERT INTO tier_history (ign, type, tier, discord_id, rated_at, tester)
+         VALUES ($1, $2, $3, $4, NOW(), $5)`,
+        [ign, typeLetter, tier, discordUser.id, tester]
+      );
+      await syncTierListChannel(interaction.client, pool);
+    }
 
     try {
       const member = await interaction.guild.members.fetch(discordUser.id);
@@ -298,8 +329,8 @@ module.exports = function applicationsCommands(ctx) {
             .addFields(
               { name: 'Player IGN', value: ign, inline: true },
               { name: 'Discord User', value: `<@${discordUser.id}>`, inline: true },
-              { name: 'Rank Type', value: typeStr, inline: true },
-              { name: 'Tier', value: tier, inline: true }
+              { name: 'Rank Type', value: rankLabel, inline: true },
+              { name: 'Tier', value: tier || 'N/A', inline: true }
             )
             .setTimestamp();
           await channel.send({ content: pingMention, embeds: [embed] });
@@ -316,8 +347,9 @@ module.exports = function applicationsCommands(ctx) {
 
     await interaction.editReply({
       content:
-        `✅ Accepted **${ign}** (<@${discordUser.id}>) for **${typeStr}** (**${tier}**). ` +
-        `Recorded in **tier_results** / **tier_history** and tier list channel synced. Applicant role removed.${note}`,
+        isPmAccept
+          ? `✅ Accepted **${ign}** (<@${discordUser.id}>) for **PM**. Added to **pm_list** and ensured an open PM membership period. Applicant role removed.${note}`
+          : `✅ Accepted **${ign}** (<@${discordUser.id}>) for **${typeStr}** (**${tier}**). Recorded in **tier_results** / **tier_history** and tier list channel synced. Applicant role removed.${note}`,
     });
 
     await sendApplicationResultLog(interaction, {
@@ -326,7 +358,7 @@ module.exports = function applicationsCommands(ctx) {
       discordMention: `<@${discordUser.id}>`,
       rankType: RANK_LABEL[typeStr] || typeStr,
       cooldown: 'None',
-      tier,
+      tier: isPmAccept ? null : tier,
       handledBy: `<@${interaction.user.id}>`,
     });
   }
@@ -393,14 +425,15 @@ module.exports = function applicationsCommands(ctx) {
             .addChoices(
               { name: 'Prime', value: 'prime' },
               { name: 'Elite', value: 'elite' },
-              { name: 'Apex', value: 'apex' }
+              { name: 'Apex', value: 'apex' },
+              { name: 'PM', value: 'pm' }
             )
         )
         .addStringOption((o) =>
           o
             .setName('tier')
-            .setDescription('Tier placement (same labels as /submit)')
-            .setRequired(true)
+            .setDescription('Tier placement (required for Prime/Elite/Apex; ignored for PM)')
+            .setRequired(false)
             .addChoices(...VALID_TIERS.map((t) => ({ name: t, value: t })))
         ),
     ],

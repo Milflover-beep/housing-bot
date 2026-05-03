@@ -214,13 +214,16 @@ module.exports = function coreCommands(ctx) {
     const hypixelKey = process.env.HYPIXEL_API_KEY;
     let blacklistRows;
     let adminBlacklistRows;
+    let blacklistHistoryRows;
+    let adminBlacklistHistoryRows;
     let altRows;
     let watchlistRows;
     let allTierRows;
     let hypixelResult;
 
     if (isPmCheck) {
-      [blacklistRows, adminBlacklistRows, altRows, watchlistRows] = await Promise.all([
+      [blacklistRows, adminBlacklistRows, blacklistHistoryRows, adminBlacklistHistoryRows, altRows, watchlistRows] =
+        await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
            WHERE LOWER(ign) = ANY($1::text[])
@@ -232,6 +235,22 @@ module.exports = function coreCommands(ctx) {
            WHERE LOWER(ign) = ANY($1::text[])
              AND is_pardoned = false
              AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT ign, reason, created_at, blacklist_expires
+           FROM blacklists
+           WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
+           FROM admin_blacklists
+           WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 1`,
           [ignAliases]
         ),
         pool.query(
@@ -251,7 +270,16 @@ module.exports = function coreCommands(ctx) {
       allTierRows = { rows: [] };
       hypixelResult = { ok: true, pmSkip: true };
     } else {
-      [blacklistRows, adminBlacklistRows, altRows, watchlistRows, allTierRows, hypixelResult] =
+      [
+        blacklistRows,
+        adminBlacklistRows,
+        blacklistHistoryRows,
+        adminBlacklistHistoryRows,
+        altRows,
+        watchlistRows,
+        allTierRows,
+        hypixelResult,
+      ] =
         await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
@@ -264,6 +292,22 @@ module.exports = function coreCommands(ctx) {
            WHERE LOWER(ign) = ANY($1::text[])
              AND is_pardoned = false
              AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT ign, reason, created_at, blacklist_expires
+           FROM blacklists
+           WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
+           FROM admin_blacklists
+           WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 1`,
           [ignAliases]
         ),
         pool.query(
@@ -587,6 +631,31 @@ module.exports = function coreCommands(ctx) {
       await interaction
         .followUp({ content, flags: MessageFlags.Ephemeral })
         .catch((e) => console.warn('check: watchlist followUp failed:', e.message));
+    }
+
+    const hasHistoricalBlacklist =
+      (blacklistHistoryRows?.rows?.length || 0) > 0 || (adminBlacklistHistoryRows?.rows?.length || 0) > 0;
+    const hasActiveBlacklist =
+      (blacklistRows?.rows?.length || 0) > 0 || (adminBlacklistRows?.rows?.length || 0) > 0;
+    if (hasHistoricalBlacklist && !hasActiveBlacklist) {
+      const latestNormal = blacklistHistoryRows?.rows?.[0] || null;
+      const latestAdmin = adminBlacklistHistoryRows?.rows?.[0] || null;
+      const latest =
+        latestNormal && latestAdmin
+          ? new Date(latestNormal.created_at) >= new Date(latestAdmin.created_at)
+            ? { ...latestNormal, source: 'Blacklist' }
+            : { ...latestAdmin, source: 'Admin blacklist' }
+          : latestNormal
+            ? { ...latestNormal, source: 'Blacklist' }
+            : latestAdmin
+              ? { ...latestAdmin, source: 'Admin blacklist' }
+              : null;
+      const popup = latest
+        ? `ℹ️ **Silent staff note:** \`${ign}\` was previously blacklisted (${latest.source.toLowerCase()}) on **${new Date(latest.created_at).toLocaleDateString()}**.\nReason: ${latest.reason || '—'}`
+        : `ℹ️ **Silent staff note:** \`${ign}\` was previously blacklisted.`;
+      await interaction
+        .followUp({ content: popup.slice(0, 1900), flags: MessageFlags.Ephemeral })
+        .catch((e) => console.warn('check: historical blacklist followUp failed:', e.message));
     }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
