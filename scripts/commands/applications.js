@@ -139,42 +139,54 @@ module.exports = function applicationsCommands(ctx) {
     const ign = identity.canonicalIgn || identity.ign;
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
+    const isPmDeny = typeStr === 'pm';
     const letter = RANK_LETTER[typeStr];
     const customCooldownRaw = interaction.options.getString('cooldown');
-    const customCooldownMs = parseCooldownToMs(customCooldownRaw);
+    const customCooldownMs = isPmDeny ? null : parseCooldownToMs(customCooldownRaw);
     let applicantMember = null;
     try {
       applicantMember = await interaction.guild.members.fetch(discordUser.id);
     } catch {}
-    const boosterReduced = isBoosterMember(applicantMember);
-    const baseCooldownMs = boosterReduced ? BOOSTER_COOLDOWN_MS[typeStr] : DEFAULT_COOLDOWN_MS[typeStr];
-    if (customCooldownRaw && customCooldownMs === undefined) {
-      return interaction.editReply({
-        content:
-          '❌ Invalid cooldown format. Use one number and one unit: `d` days, `h` hours, `m` minutes (e.g. `3d`, `12h`, `30m`).',
-      });
-    }
-    const cooldownMs = customCooldownMs != null ? customCooldownMs : baseCooldownMs;
-    const cooldownUntil = new Date(Date.now() + cooldownMs);
-    const boosterCooldownLabel =
-      typeStr === 'apex' ? '1.5 weeks' : typeStr === 'elite' ? '1 week' : '4 days';
-    const cooldownSummary =
-      customCooldownMs != null
-        ? `custom duration **${customCooldownRaw.trim()}**`
-        : boosterReduced
-          ? `booster reduced duration **${boosterCooldownLabel}**`
-          : `${WEEKS[typeStr]} week${WEEKS[typeStr] > 1 ? 's' : ''}`;
+    let cooldownUntil = null;
+    let cooldownSummary = 'none';
+    if (!isPmDeny) {
+      const boosterReduced = isBoosterMember(applicantMember);
+      const baseCooldownMs = boosterReduced ? BOOSTER_COOLDOWN_MS[typeStr] : DEFAULT_COOLDOWN_MS[typeStr];
+      if (customCooldownRaw && customCooldownMs === undefined) {
+        return interaction.editReply({
+          content:
+            '❌ Invalid cooldown format. Use one number and one unit: `d` days, `h` hours, `m` minutes (e.g. `3d`, `12h`, `30m`).',
+        });
+      }
+      const cooldownMs = customCooldownMs != null ? customCooldownMs : baseCooldownMs;
+      cooldownUntil = new Date(Date.now() + cooldownMs);
+      const boosterCooldownLabel =
+        typeStr === 'apex' ? '1.5 weeks' : typeStr === 'elite' ? '1 week' : '4 days';
+      cooldownSummary =
+        customCooldownMs != null
+          ? `custom duration **${customCooldownRaw.trim()}**`
+          : boosterReduced
+            ? `booster reduced duration **${boosterCooldownLabel}**`
+            : `${WEEKS[typeStr]} week${WEEKS[typeStr] > 1 ? 's' : ''}`;
 
-    await pool.query(
-      `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (discord_id) DO UPDATE SET
-         ign = EXCLUDED.ign,
-         rank_type = EXCLUDED.rank_type,
-         cooldown_until = EXCLUDED.cooldown_until,
-         created_at = NOW()`,
-      [discordUser.id, ign, letter, cooldownUntil]
-    );
+      await pool.query(
+        `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (discord_id) DO UPDATE SET
+           ign = EXCLUDED.ign,
+           rank_type = EXCLUDED.rank_type,
+           cooldown_until = EXCLUDED.cooldown_until,
+           created_at = NOW()`,
+        [discordUser.id, ign, letter, cooldownUntil]
+      );
+    } else {
+      // PM denies should never set or keep application cooldowns.
+      try {
+        await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [discordUser.id]);
+      } catch (e) {
+        if (e && e.code !== '42P01') throw e;
+      }
+    }
 
     try {
       if (applicantMember) await removeApplicantRole(interaction.guild, applicantMember);
@@ -184,8 +196,11 @@ module.exports = function applicationsCommands(ctx) {
 
     await interaction.editReply({
       content:
-        `✅ Denied **${ign}** (<@${discordUser.id}>) for **${typeStr}** tryout.\n` +
-        `Cooldown until <t:${Math.floor(cooldownUntil.getTime() / 1000)}:F> (${cooldownSummary}).`,
+        isPmDeny
+          ? `✅ Denied **${ign}** (<@${discordUser.id}>) for **PM** tryout.\nNo cooldown was applied.`
+          : `✅ Denied **${ign}** (<@${discordUser.id}>) for **${typeStr}** tryout.\nCooldown until <t:${Math.floor(
+              cooldownUntil.getTime() / 1000
+            )}:F> (${cooldownSummary}).`,
     });
 
     await sendApplicationResultLog(interaction, {
@@ -193,7 +208,7 @@ module.exports = function applicationsCommands(ctx) {
       ign,
       discordMention: `<@${discordUser.id}>`,
       rankType: RANK_LABEL[typeStr] || typeStr,
-      cooldown: `<t:${Math.floor(cooldownUntil.getTime() / 1000)}:F>`,
+      cooldown: isPmDeny ? 'None (PM deny)' : `<t:${Math.floor(cooldownUntil.getTime() / 1000)}:F>`,
       handledBy: `<@${interaction.user.id}>`,
     });
   }
@@ -379,18 +394,19 @@ module.exports = function applicationsCommands(ctx) {
         .addStringOption((o) =>
           o
             .setName('type')
-            .setDescription('Rank ladder (cooldown: Prime 1wk, Elite 2wk, Apex 3wk)')
+            .setDescription('Rank ladder (PM denies do not apply cooldown)')
             .setRequired(true)
             .addChoices(
               { name: 'Prime (1 week)', value: 'prime' },
               { name: 'Elite (2 weeks)', value: 'elite' },
-              { name: 'Apex (3 weeks)', value: 'apex' }
+              { name: 'Apex (3 weeks)', value: 'apex' },
+              { name: 'PM (no cooldown)', value: 'pm' }
             )
         )
         .addStringOption((o) =>
           o
             .setName('cooldown')
-            .setDescription('Optional override, e.g. 3d, 12h, 30m')
+            .setDescription('Optional override for Prime/Elite/Apex, e.g. 3d, 12h, 30m')
             .setRequired(false)
         ),
       new SlashCommandBuilder()
