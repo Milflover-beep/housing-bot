@@ -216,13 +216,24 @@ module.exports = function coreCommands(ctx) {
     let adminBlacklistRows;
     let blacklistHistoryRows;
     let adminBlacklistHistoryRows;
+    let activeBanRows;
+    let historicalBanRows;
     let altRows;
     let watchlistRows;
     let allTierRows;
     let hypixelResult;
 
     if (isPmCheck) {
-      [blacklistRows, adminBlacklistRows, blacklistHistoryRows, adminBlacklistHistoryRows, altRows, watchlistRows] =
+      [
+        blacklistRows,
+        adminBlacklistRows,
+        blacklistHistoryRows,
+        adminBlacklistHistoryRows,
+        activeBanRows,
+        historicalBanRows,
+        altRows,
+        watchlistRows,
+      ] =
         await Promise.all([
         pool.query(
           `SELECT * FROM blacklists
@@ -254,6 +265,33 @@ module.exports = function coreCommands(ctx) {
           [ignAliases]
         ),
         pool.query(
+          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
+           FROM punishment_logs
+           WHERE LOWER(user_ign) = ANY($1::text[])
+             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+             AND status = 'active'
+             AND punishment_status = 'active'
+             AND (
+               COALESCE(TRIM(cooldown_raw), '') = '-1'
+               OR reversal_remind_at IS NULL
+               OR reversal_remind_at > NOW()
+             )
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
+           FROM punishment_logs
+           WHERE LOWER(user_ign) = ANY($1::text[])
+             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+             AND status = 'active'
+             AND punishment_status = 'active'
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [ignAliases]
+        ),
+        pool.query(
           `SELECT * FROM alts
            WHERE LOWER(original_ign) = ANY($1::text[])
               OR LOWER(alt_ign) = ANY($1::text[])`,
@@ -275,6 +313,8 @@ module.exports = function coreCommands(ctx) {
         adminBlacklistRows,
         blacklistHistoryRows,
         adminBlacklistHistoryRows,
+        activeBanRows,
+        historicalBanRows,
         altRows,
         watchlistRows,
         allTierRows,
@@ -306,6 +346,33 @@ module.exports = function coreCommands(ctx) {
           `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
            FROM admin_blacklists
            WHERE LOWER(ign) = ANY($1::text[])
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
+           FROM punishment_logs
+           WHERE LOWER(user_ign) = ANY($1::text[])
+             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+             AND status = 'active'
+             AND punishment_status = 'active'
+             AND (
+               COALESCE(TRIM(cooldown_raw), '') = '-1'
+               OR reversal_remind_at IS NULL
+               OR reversal_remind_at > NOW()
+             )
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [ignAliases]
+        ),
+        pool.query(
+          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
+           FROM punishment_logs
+           WHERE LOWER(user_ign) = ANY($1::text[])
+             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+             AND status = 'active'
+             AND punishment_status = 'active'
            ORDER BY created_at DESC
            LIMIT 1`,
           [ignAliases]
@@ -656,6 +723,17 @@ module.exports = function coreCommands(ctx) {
       await interaction
         .followUp({ content: popup.slice(0, 1900), flags: MessageFlags.Ephemeral })
         .catch((e) => console.warn('check: historical blacklist followUp failed:', e.message));
+    }
+
+    const activeBan = activeBanRows?.rows?.[0] || null;
+    const historicalBan = historicalBanRows?.rows?.[0] || null;
+    if (activeBan || historicalBan) {
+      const note = activeBan
+        ? `ℹ️ **Silent staff note:** \`${ign}\` is currently banned (log **#${activeBan.id}**).`
+        : `ℹ️ **Silent staff note:** \`${ign}\` was previously banned (latest log **#${historicalBan.id}** on **${new Date(historicalBan.created_at).toLocaleDateString()}**).`;
+      await interaction
+        .followUp({ content: note.slice(0, 1900), flags: MessageFlags.Ephemeral })
+        .catch((e) => console.warn('check: ban history followUp failed:', e.message));
     }
 
     // Optional: send a channel message (e.g. prefix command) for another bot — Discord does not allow invoking another app's slash commands.
