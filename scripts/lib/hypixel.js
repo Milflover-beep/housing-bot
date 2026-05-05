@@ -4,6 +4,36 @@
  */
 
 const HYPIXEL_PLAYER_URL = 'https://api.hypixel.net/v2/player';
+const CHECK_LEVEL_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CHECK_LEVEL_CACHE_MAX_ENTRIES = 200;
+const networkLevelCache = new Map();
+
+function readCachedNetworkLevel(id) {
+  const key = String(id || '').trim().toLowerCase();
+  if (!key) return null;
+  const entry = networkLevelCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAtMs > CHECK_LEVEL_CACHE_TTL_MS) {
+    networkLevelCache.delete(key);
+    return null;
+  }
+  // Refresh recency for simple LRU behavior.
+  networkLevelCache.delete(key);
+  networkLevelCache.set(key, entry);
+  return entry;
+}
+
+function writeCachedNetworkLevel(id, value) {
+  const key = String(id || '').trim().toLowerCase();
+  if (!key) return;
+  networkLevelCache.delete(key);
+  networkLevelCache.set(key, { ...value, cachedAtMs: Date.now() });
+  while (networkLevelCache.size > CHECK_LEVEL_CACHE_MAX_ENTRIES) {
+    const oldestKey = networkLevelCache.keys().next().value;
+    if (!oldestKey) break;
+    networkLevelCache.delete(oldestKey);
+  }
+}
 
 function networkLevelFromExp(networkExp) {
   const exp = Math.max(0, Number(networkExp) || 0);
@@ -46,6 +76,17 @@ async function fetchNetworkLevelForCheck(apiKey, ignOrUuidNormalized) {
 
     if (!res.ok) {
       const cause = data && typeof data.cause === 'string' ? data.cause : '';
+      if (res.status === 429) {
+        const cached = readCachedNetworkLevel(id);
+        if (cached) {
+          return {
+            ok: true,
+            level: cached.level,
+            hasPlayer: cached.hasPlayer,
+            fromCache: true,
+          };
+        }
+      }
       return {
         ok: false,
         message: `Hypixel API HTTP ${res.status}${cause ? ` (${cause})` : ''}.`,
@@ -65,7 +106,9 @@ async function fetchNetworkLevelForCheck(apiKey, ignOrUuidNormalized) {
     }
 
     const level = networkLevelFromExp(exp);
-    return { ok: true, level, hasPlayer: Boolean(player) };
+    const payload = { ok: true, level, hasPlayer: Boolean(player), fromCache: false };
+    writeCachedNetworkLevel(id, { level: payload.level, hasPlayer: payload.hasPlayer });
+    return payload;
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
     return { ok: false, message: `Could not reach Hypixel API (${msg}).` };

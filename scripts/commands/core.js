@@ -466,6 +466,7 @@ module.exports = function coreCommands(ctx) {
 
     /** API/config failures: do not block eligibility; PM checks skip Hypixel entirely. */
     let hypixelDegradedNote = '';
+    let hypixelCacheNote = '';
     if (!isPmCheck) {
       if (!hypixelResult.ok) {
         const detail =
@@ -473,6 +474,9 @@ module.exports = function coreCommands(ctx) {
             ? `${hypixelResult.message.slice(0, 497)}…`
             : hypixelResult.message;
         hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Verify manually before applying.`;
+      } else if (hypixelResult.fromCache) {
+        hypixelCacheNote =
+          'Hypixel API returned HTTP 429 for this lookup, so `/check` used a recent cached level.';
       } else if (hypixelResult.level < 30) {
         eligible = false;
         if (!hypixelResult.hasPlayer) {
@@ -654,6 +658,12 @@ module.exports = function coreCommands(ctx) {
       embed.addFields({
         name: 'Hypixel API',
         value: hypixelDegradedNote.slice(0, 1024),
+        inline: false,
+      });
+    } else if (hypixelCacheNote) {
+      embed.addFields({
+        name: 'Hypixel cache',
+        value: hypixelCacheNote.slice(0, 1024),
         inline: false,
       });
     }
