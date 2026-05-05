@@ -66,6 +66,112 @@ module.exports = function applicationsCommands(ctx) {
     return boosterName ? member.roles.cache.some((r) => r.name === boosterName) : false;
   }
 
+  async function fetchApplicantMember(guild, discordUserId) {
+    if (!guild || !discordUserId) return null;
+    try {
+      return await guild.members.fetch(discordUserId);
+    } catch {
+      return null;
+    }
+  }
+
+  async function clearApplicationDenyCooldown(discordUserId) {
+    try {
+      await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [discordUserId]);
+    } catch (e) {
+      if (e && e.code !== '42P01') throw e;
+    }
+  }
+
+  async function applyDenyCooldownPolicy({ typeStr, customCooldownRaw, applicantMember, discordUserId, ign }) {
+    const isPmDeny = typeStr === 'pm';
+    if (isPmDeny) {
+      await clearApplicationDenyCooldown(discordUserId);
+      return {
+        isPmDeny: true,
+        cooldownUntil: null,
+        cooldownSummary: 'none',
+      };
+    }
+
+    const customCooldownMs = parseCooldownToMs(customCooldownRaw);
+    if (customCooldownRaw && customCooldownMs === undefined) {
+      return {
+        error:
+          '❌ Invalid cooldown format. Use one number and one unit: `d` days, `h` hours, `m` minutes (e.g. `3d`, `12h`, `30m`).',
+      };
+    }
+
+    const letter = RANK_LETTER[typeStr];
+    const boosterReduced = isBoosterMember(applicantMember);
+    const baseCooldownMs = boosterReduced ? BOOSTER_COOLDOWN_MS[typeStr] : DEFAULT_COOLDOWN_MS[typeStr];
+    const cooldownMs = customCooldownMs != null ? customCooldownMs : baseCooldownMs;
+    const cooldownUntil = new Date(Date.now() + cooldownMs);
+    const boosterCooldownLabel =
+      typeStr === 'apex' ? '1.5 weeks' : typeStr === 'elite' ? '1 week' : '4 days';
+    const cooldownSummary =
+      customCooldownMs != null
+        ? `custom duration **${customCooldownRaw.trim()}**`
+        : boosterReduced
+          ? `booster reduced duration **${boosterCooldownLabel}**`
+          : `${WEEKS[typeStr]} week${WEEKS[typeStr] > 1 ? 's' : ''}`;
+
+    await pool.query(
+      `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (discord_id) DO UPDATE SET
+         ign = EXCLUDED.ign,
+         rank_type = EXCLUDED.rank_type,
+         cooldown_until = EXCLUDED.cooldown_until,
+         created_at = NOW()`,
+      [discordUserId, ign, letter, cooldownUntil]
+    );
+
+    return { isPmDeny: false, cooldownUntil, cooldownSummary };
+  }
+
+  async function applyPmAcceptPlacement(ign) {
+    await pool.query(
+      `INSERT INTO pm_list (ign, created_at)
+       SELECT $1, NOW()
+       WHERE NOT EXISTS (
+         SELECT 1 FROM pm_list WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+       )`,
+      [ign]
+    );
+    try {
+      await pool.query(
+        `INSERT INTO pm_membership_periods (ign, start_at, created_at)
+         SELECT $1, NOW(), NOW()
+         WHERE NOT EXISTS (
+           SELECT 1
+           FROM pm_membership_periods
+           WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
+             AND end_at IS NULL
+         )`,
+        [ign]
+      );
+    } catch (e) {
+      if (e && e.code !== '42P01') throw e;
+    }
+  }
+
+  async function applyTierAcceptPlacement({ ign, ignAliases, typeStr, tier, discordUserId, tester, client }) {
+    const typeLetter = RANK_LETTER[typeStr];
+    await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
+    await pool.query(
+      `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
+       VALUES ($1, $2, $3, $4, NOW(), $5)`,
+      [ign, typeLetter, tier, discordUserId, tester]
+    );
+    await pool.query(
+      `INSERT INTO tier_history (ign, type, tier, discord_id, rated_at, tester)
+       VALUES ($1, $2, $3, $4, NOW(), $5)`,
+      [ign, typeLetter, tier, discordUserId, tester]
+    );
+    await syncTierListChannel(client, pool);
+  }
+
   async function sendApplicationResultLog(interaction, data) {
     try {
       const channelId =
@@ -139,54 +245,19 @@ module.exports = function applicationsCommands(ctx) {
     const ign = identity.canonicalIgn || identity.ign;
     const discordUser = interaction.options.getUser('discord', true);
     const typeStr = interaction.options.getString('type');
-    const isPmDeny = typeStr === 'pm';
-    const letter = RANK_LETTER[typeStr];
     const customCooldownRaw = interaction.options.getString('cooldown');
-    const customCooldownMs = isPmDeny ? null : parseCooldownToMs(customCooldownRaw);
-    let applicantMember = null;
-    try {
-      applicantMember = await interaction.guild.members.fetch(discordUser.id);
-    } catch {}
-    let cooldownUntil = null;
-    let cooldownSummary = 'none';
-    if (!isPmDeny) {
-      const boosterReduced = isBoosterMember(applicantMember);
-      const baseCooldownMs = boosterReduced ? BOOSTER_COOLDOWN_MS[typeStr] : DEFAULT_COOLDOWN_MS[typeStr];
-      if (customCooldownRaw && customCooldownMs === undefined) {
-        return interaction.editReply({
-          content:
-            '❌ Invalid cooldown format. Use one number and one unit: `d` days, `h` hours, `m` minutes (e.g. `3d`, `12h`, `30m`).',
-        });
-      }
-      const cooldownMs = customCooldownMs != null ? customCooldownMs : baseCooldownMs;
-      cooldownUntil = new Date(Date.now() + cooldownMs);
-      const boosterCooldownLabel =
-        typeStr === 'apex' ? '1.5 weeks' : typeStr === 'elite' ? '1 week' : '4 days';
-      cooldownSummary =
-        customCooldownMs != null
-          ? `custom duration **${customCooldownRaw.trim()}**`
-          : boosterReduced
-            ? `booster reduced duration **${boosterCooldownLabel}**`
-            : `${WEEKS[typeStr]} week${WEEKS[typeStr] > 1 ? 's' : ''}`;
-
-      await pool.query(
-        `INSERT INTO application_denials (discord_id, ign, rank_type, cooldown_until)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (discord_id) DO UPDATE SET
-           ign = EXCLUDED.ign,
-           rank_type = EXCLUDED.rank_type,
-           cooldown_until = EXCLUDED.cooldown_until,
-           created_at = NOW()`,
-        [discordUser.id, ign, letter, cooldownUntil]
-      );
-    } else {
-      // PM denies should never set or keep application cooldowns.
-      try {
-        await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [discordUser.id]);
-      } catch (e) {
-        if (e && e.code !== '42P01') throw e;
-      }
+    const applicantMember = await fetchApplicantMember(interaction.guild, discordUser.id);
+    const cooldownPolicy = await applyDenyCooldownPolicy({
+      typeStr,
+      customCooldownRaw,
+      applicantMember,
+      discordUserId: discordUser.id,
+      ign,
+    });
+    if (cooldownPolicy.error) {
+      return interaction.editReply({ content: cooldownPolicy.error });
     }
+    const { isPmDeny, cooldownUntil, cooldownSummary } = cooldownPolicy;
 
     try {
       if (applicantMember) await removeApplicantRole(interaction.guild, applicantMember);
@@ -275,43 +346,17 @@ module.exports = function applicationsCommands(ctx) {
     }
     const tester = interaction.user.username;
     if (isPmAccept) {
-      await pool.query(
-        `INSERT INTO pm_list (ign, created_at)
-         SELECT $1, NOW()
-         WHERE NOT EXISTS (
-           SELECT 1 FROM pm_list WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
-         )`,
-        [ign]
-      );
-      try {
-        await pool.query(
-          `INSERT INTO pm_membership_periods (ign, start_at, created_at)
-           SELECT $1, NOW(), NOW()
-           WHERE NOT EXISTS (
-             SELECT 1
-             FROM pm_membership_periods
-             WHERE LOWER(TRIM(ign)) = LOWER(TRIM($1::text))
-               AND end_at IS NULL
-           )`,
-          [ign]
-        );
-      } catch (e) {
-        if (e && e.code !== '42P01') throw e;
-      }
+      await applyPmAcceptPlacement(ign);
     } else {
-      const typeLetter = RANK_LETTER[typeStr];
-      await pool.query('DELETE FROM tier_results WHERE LOWER(ign) = ANY($1::text[])', [ignAliases]);
-      await pool.query(
-        `INSERT INTO tier_results (ign, type, tier, discord_id, created_at, tester)
-         VALUES ($1, $2, $3, $4, NOW(), $5)`,
-        [ign, typeLetter, tier, discordUser.id, tester]
-      );
-      await pool.query(
-        `INSERT INTO tier_history (ign, type, tier, discord_id, rated_at, tester)
-         VALUES ($1, $2, $3, $4, NOW(), $5)`,
-        [ign, typeLetter, tier, discordUser.id, tester]
-      );
-      await syncTierListChannel(interaction.client, pool);
+      await applyTierAcceptPlacement({
+        ign,
+        ignAliases,
+        typeStr,
+        tier,
+        discordUserId: discordUser.id,
+        tester,
+        client: interaction.client,
+      });
     }
 
     try {
@@ -321,11 +366,7 @@ module.exports = function applicationsCommands(ctx) {
       console.warn('accept: applicant role:', e.message);
     }
 
-    try {
-      await pool.query('DELETE FROM application_denials WHERE discord_id = $1', [discordUser.id]);
-    } catch (e) {
-      if (e && e.code !== '42P01') throw e;
-    }
+    await clearApplicationDenyCooldown(discordUser.id);
 
     const notifyChannelId = parseRoleIdList('ACCEPT_NOTIFY_CHANNEL_ID')[0];
     const pingRoleId = acceptPingRoleId();

@@ -64,6 +64,164 @@ module.exports = function coreCommands(ctx) {
     return rt === 'pm' && CHECK_PM_CATEGORY_IDS.includes(categoryId);
   }
 
+  async function fetchCheckBaseRows(ignAliases) {
+    const [
+      blacklistRows,
+      adminBlacklistRows,
+      blacklistHistoryRows,
+      adminBlacklistHistoryRows,
+      activeBanRows,
+      historicalBanRows,
+      altRows,
+      watchlistRows,
+    ] = await Promise.all([
+      pool.query(
+        `SELECT * FROM blacklists
+         WHERE LOWER(ign) = ANY($1::text[])
+           AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT * FROM admin_blacklists
+         WHERE LOWER(ign) = ANY($1::text[])
+           AND is_pardoned = false
+           AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT ign, reason, created_at, blacklist_expires
+         FROM blacklists
+         WHERE LOWER(ign) = ANY($1::text[])
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
+         FROM admin_blacklists
+         WHERE LOWER(ign) = ANY($1::text[])
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
+         FROM punishment_logs
+         WHERE LOWER(user_ign) = ANY($1::text[])
+           AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+           AND status = 'active'
+           AND punishment_status = 'active'
+           AND (
+             COALESCE(TRIM(cooldown_raw), '') = '-1'
+             OR reversal_remind_at IS NULL
+             OR reversal_remind_at > NOW()
+           )
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
+         FROM punishment_logs
+         WHERE LOWER(user_ign) = ANY($1::text[])
+           AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+           AND status = 'active'
+           AND punishment_status = 'active'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT * FROM alts
+         WHERE LOWER(original_ign) = ANY($1::text[])
+            OR LOWER(alt_ign) = ANY($1::text[])`,
+        [ignAliases]
+      ),
+      pool.query(
+        `SELECT * FROM watchlist
+         WHERE LOWER(ign) = ANY($1::text[])
+         ORDER BY created_at DESC
+         LIMIT 10`,
+        [ignAliases]
+      ),
+    ]);
+
+    return {
+      blacklistRows,
+      adminBlacklistRows,
+      blacklistHistoryRows,
+      adminBlacklistHistoryRows,
+      activeBanRows,
+      historicalBanRows,
+      altRows,
+      watchlistRows,
+    };
+  }
+
+  async function fetchCheckRows({ ignAliases, isPmCheck, hypixelKey, ign }) {
+    const baseRows = await fetchCheckBaseRows(ignAliases);
+    if (isPmCheck) {
+      return {
+        ...baseRows,
+        allTierRows: { rows: [] },
+        hypixelResult: { ok: true, pmSkip: true },
+      };
+    }
+
+    const [allTierRows, hypixelResult] = await Promise.all([
+      pool.query(
+        `SELECT type, tier, created_at
+         FROM tier_results
+         WHERE LOWER(TRIM(ign)) = ANY($1::text[]) AND type IN ('P','E','A')
+         ORDER BY id DESC
+         LIMIT 1`,
+        [ignAliases]
+      ),
+      fetchNetworkLevelForCheck(hypixelKey, ign),
+    ]);
+
+    return { ...baseRows, allTierRows, hypixelResult };
+  }
+
+  function buildHistoricalBlacklistPopup({
+    ign,
+    blacklistRows,
+    adminBlacklistRows,
+    blacklistHistoryRows,
+    adminBlacklistHistoryRows,
+  }) {
+    const hasHistoricalBlacklist =
+      (blacklistHistoryRows?.rows?.length || 0) > 0 || (adminBlacklistHistoryRows?.rows?.length || 0) > 0;
+    const hasActiveBlacklist =
+      (blacklistRows?.rows?.length || 0) > 0 || (adminBlacklistRows?.rows?.length || 0) > 0;
+    if (!hasHistoricalBlacklist || hasActiveBlacklist) return null;
+
+    const latestNormal = blacklistHistoryRows?.rows?.[0] || null;
+    const latestAdmin = adminBlacklistHistoryRows?.rows?.[0] || null;
+    const latest =
+      latestNormal && latestAdmin
+        ? new Date(latestNormal.created_at) >= new Date(latestAdmin.created_at)
+          ? { ...latestNormal, source: 'Blacklist' }
+          : { ...latestAdmin, source: 'Admin blacklist' }
+        : latestNormal
+          ? { ...latestNormal, source: 'Blacklist' }
+          : latestAdmin
+            ? { ...latestAdmin, source: 'Admin blacklist' }
+            : null;
+    return latest
+      ? `ℹ️ **Silent staff note:** \`${ign}\` was previously blacklisted (${latest.source.toLowerCase()}) on **${new Date(latest.created_at).toLocaleDateString()}**.\nReason: ${latest.reason || '—'}`
+      : `ℹ️ **Silent staff note:** \`${ign}\` was previously blacklisted.`;
+  }
+
+  function buildBanHistoryPopup({ ign, activeBanRows, historicalBanRows }) {
+    const activeBan = activeBanRows?.rows?.[0] || null;
+    const historicalBan = historicalBanRows?.rows?.[0] || null;
+    if (!activeBan && !historicalBan) return null;
+    return activeBan
+      ? `ℹ️ **Silent staff note:** \`${ign}\` is currently banned (log **#${activeBan.id}**).`
+      : `ℹ️ **Silent staff note:** \`${ign}\` was previously banned (latest log **#${historicalBan.id}** on **${new Date(historicalBan.created_at).toLocaleDateString()}**).`;
+  }
+
   async function resolveChannelCategoryId(channel, guild) {
     if (!channel || !guild) return null;
     // Guild text/voice/forum channels typically have category in parentId.
@@ -223,195 +381,18 @@ module.exports = function coreCommands(ctx) {
     const rankLabel = isPmCheck ? 'PM' : rankType.charAt(0).toUpperCase() + rankType.slice(1);
 
     const hypixelKey = process.env.HYPIXEL_API_KEY;
-    let blacklistRows;
-    let adminBlacklistRows;
-    let blacklistHistoryRows;
-    let adminBlacklistHistoryRows;
-    let activeBanRows;
-    let historicalBanRows;
-    let altRows;
-    let watchlistRows;
-    let allTierRows;
-    let hypixelResult;
-
-    if (isPmCheck) {
-      [
-        blacklistRows,
-        adminBlacklistRows,
-        blacklistHistoryRows,
-        adminBlacklistHistoryRows,
-        activeBanRows,
-        historicalBanRows,
-        altRows,
-        watchlistRows,
-      ] =
-        await Promise.all([
-        pool.query(
-          `SELECT * FROM blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT * FROM admin_blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-             AND is_pardoned = false
-             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT ign, reason, created_at, blacklist_expires
-           FROM blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
-           FROM admin_blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
-           FROM punishment_logs
-           WHERE LOWER(user_ign) = ANY($1::text[])
-             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
-             AND status = 'active'
-             AND punishment_status = 'active'
-             AND (
-               COALESCE(TRIM(cooldown_raw), '') = '-1'
-               OR reversal_remind_at IS NULL
-               OR reversal_remind_at > NOW()
-             )
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
-           FROM punishment_logs
-           WHERE LOWER(user_ign) = ANY($1::text[])
-             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
-             AND status = 'active'
-             AND punishment_status = 'active'
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT * FROM alts
-           WHERE LOWER(original_ign) = ANY($1::text[])
-              OR LOWER(alt_ign) = ANY($1::text[])`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT * FROM watchlist
-           WHERE LOWER(ign) = ANY($1::text[])
-           ORDER BY created_at DESC
-           LIMIT 10`,
-          [ignAliases]
-        ),
-      ]);
-      allTierRows = { rows: [] };
-      hypixelResult = { ok: true, pmSkip: true };
-    } else {
-      [
-        blacklistRows,
-        adminBlacklistRows,
-        blacklistHistoryRows,
-        adminBlacklistHistoryRows,
-        activeBanRows,
-        historicalBanRows,
-        altRows,
-        watchlistRows,
-        allTierRows,
-        hypixelResult,
-      ] =
-        await Promise.all([
-        pool.query(
-          `SELECT * FROM blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT * FROM admin_blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-             AND is_pardoned = false
-             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT ign, reason, created_at, blacklist_expires
-           FROM blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
-           FROM admin_blacklists
-           WHERE LOWER(ign) = ANY($1::text[])
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
-           FROM punishment_logs
-           WHERE LOWER(user_ign) = ANY($1::text[])
-             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
-             AND status = 'active'
-             AND punishment_status = 'active'
-             AND (
-               COALESCE(TRIM(cooldown_raw), '') = '-1'
-               OR reversal_remind_at IS NULL
-               OR reversal_remind_at > NOW()
-             )
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT id, punishment_details, cooldown_raw, reversal_remind_at, created_at
-           FROM punishment_logs
-           WHERE LOWER(user_ign) = ANY($1::text[])
-             AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
-             AND status = 'active'
-             AND punishment_status = 'active'
-           ORDER BY created_at DESC
-           LIMIT 1`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT * FROM alts
-           WHERE LOWER(original_ign) = ANY($1::text[])
-              OR LOWER(alt_ign) = ANY($1::text[])`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT * FROM watchlist
-           WHERE LOWER(ign) = ANY($1::text[])
-           ORDER BY created_at DESC
-           LIMIT 10`,
-          [ignAliases]
-        ),
-        pool.query(
-          `SELECT type, tier, created_at
-         FROM tier_results
-         WHERE LOWER(TRIM(ign)) = ANY($1::text[]) AND type IN ('P','E','A')
-         ORDER BY id DESC
-         LIMIT 1`,
-          [ignAliases]
-        ),
-        fetchNetworkLevelForCheck(hypixelKey, ign),
-        ]);
-    }
+    const {
+      blacklistRows,
+      adminBlacklistRows,
+      blacklistHistoryRows,
+      adminBlacklistHistoryRows,
+      activeBanRows,
+      historicalBanRows,
+      altRows,
+      watchlistRows,
+      allTierRows,
+      hypixelResult,
+    } = await fetchCheckRows({ ignAliases, isPmCheck, hypixelKey, ign });
 
     const adminLevelForAltVisibility = 4;
     const visibleAltRows =
@@ -711,39 +692,23 @@ module.exports = function coreCommands(ctx) {
         .catch((e) => console.warn('check: watchlist followUp failed:', e.message));
     }
 
-    const hasHistoricalBlacklist =
-      (blacklistHistoryRows?.rows?.length || 0) > 0 || (adminBlacklistHistoryRows?.rows?.length || 0) > 0;
-    const hasActiveBlacklist =
-      (blacklistRows?.rows?.length || 0) > 0 || (adminBlacklistRows?.rows?.length || 0) > 0;
-    if (hasHistoricalBlacklist && !hasActiveBlacklist) {
-      const latestNormal = blacklistHistoryRows?.rows?.[0] || null;
-      const latestAdmin = adminBlacklistHistoryRows?.rows?.[0] || null;
-      const latest =
-        latestNormal && latestAdmin
-          ? new Date(latestNormal.created_at) >= new Date(latestAdmin.created_at)
-            ? { ...latestNormal, source: 'Blacklist' }
-            : { ...latestAdmin, source: 'Admin blacklist' }
-          : latestNormal
-            ? { ...latestNormal, source: 'Blacklist' }
-            : latestAdmin
-              ? { ...latestAdmin, source: 'Admin blacklist' }
-              : null;
-      const popup = latest
-        ? `ℹ️ **Silent staff note:** \`${ign}\` was previously blacklisted (${latest.source.toLowerCase()}) on **${new Date(latest.created_at).toLocaleDateString()}**.\nReason: ${latest.reason || '—'}`
-        : `ℹ️ **Silent staff note:** \`${ign}\` was previously blacklisted.`;
+    const historicalBlacklistPopup = buildHistoricalBlacklistPopup({
+      ign,
+      blacklistRows,
+      adminBlacklistRows,
+      blacklistHistoryRows,
+      adminBlacklistHistoryRows,
+    });
+    if (historicalBlacklistPopup) {
       await interaction
-        .followUp({ content: popup.slice(0, 1900), flags: MessageFlags.Ephemeral })
+        .followUp({ content: historicalBlacklistPopup.slice(0, 1900), flags: MessageFlags.Ephemeral })
         .catch((e) => console.warn('check: historical blacklist followUp failed:', e.message));
     }
 
-    const activeBan = activeBanRows?.rows?.[0] || null;
-    const historicalBan = historicalBanRows?.rows?.[0] || null;
-    if (activeBan || historicalBan) {
-      const note = activeBan
-        ? `ℹ️ **Silent staff note:** \`${ign}\` is currently banned (log **#${activeBan.id}**).`
-        : `ℹ️ **Silent staff note:** \`${ign}\` was previously banned (latest log **#${historicalBan.id}** on **${new Date(historicalBan.created_at).toLocaleDateString()}**).`;
+    const banHistoryPopup = buildBanHistoryPopup({ ign, activeBanRows, historicalBanRows });
+    if (banHistoryPopup) {
       await interaction
-        .followUp({ content: note.slice(0, 1900), flags: MessageFlags.Ephemeral })
+        .followUp({ content: banHistoryPopup.slice(0, 1900), flags: MessageFlags.Ephemeral })
         .catch((e) => console.warn('check: ban history followUp failed:', e.message));
     }
 
