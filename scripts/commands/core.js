@@ -34,6 +34,10 @@ module.exports = function coreCommands(ctx) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const CHECK_PM_CATEGORY_IDS = String(process.env.CHECK_PM_CATEGORY_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
   function rankTypeToTicketPrefix(rankType) {
@@ -51,6 +55,13 @@ module.exports = function coreCommands(ctx) {
     const boosterName = String(process.env.BOT_ROLE_BOOSTER_NAME || '').trim();
     if (boosterName) return hasRoleName(member, boosterName);
     return false;
+  }
+
+  function isAllowedApplicationCategory(categoryId, rankType) {
+    if (!categoryId) return false;
+    if (CHECK_RENAME_CATEGORY_IDS.includes(categoryId)) return true;
+    const rt = String(rankType || '').toLowerCase();
+    return rt === 'pm' && CHECK_PM_CATEGORY_IDS.includes(categoryId);
   }
 
   async function resolveChannelCategoryId(channel, guild) {
@@ -466,7 +477,6 @@ module.exports = function coreCommands(ctx) {
 
     /** API/config failures: do not block eligibility; PM checks skip Hypixel entirely. */
     let hypixelDegradedNote = '';
-    let hypixelCacheNote = '';
     if (!isPmCheck) {
       if (!hypixelResult.ok) {
         const detail =
@@ -474,9 +484,6 @@ module.exports = function coreCommands(ctx) {
             ? `${hypixelResult.message.slice(0, 497)}…`
             : hypixelResult.message;
         hypixelDegradedNote = `Hypixel could not verify network level automatically (${detail}). Verify manually before applying.`;
-      } else if (hypixelResult.fromCache) {
-        hypixelCacheNote =
-          'Hypixel API returned HTTP 429 for this lookup, so `/check` used a recent cached level.';
       } else if (hypixelResult.level < 30) {
         eligible = false;
         if (!hypixelResult.hasPlayer) {
@@ -558,11 +565,10 @@ module.exports = function coreCommands(ctx) {
       interaction.guild && interaction.channel
         ? await resolveChannelCategoryId(interaction.channel, interaction.guild)
         : null;
-    const isAllowedCheckCategory = Boolean(
-      checkCategoryId && CHECK_RENAME_CATEGORY_IDS.includes(checkCategoryId)
-    );
+    const isAllowedCheckCategory = isAllowedApplicationCategory(checkCategoryId, rankType);
 
     let roleNote = '';
+    let roleNoteIsInformational = false;
     if (passedCheck) {
       if (interaction.guild && isAllowedCheckCategory) {
         try {
@@ -618,6 +624,7 @@ module.exports = function coreCommands(ctx) {
           roleNote = `\n\n⚠️ Could not assign applicant role: ${hint}`;
         }
       } else {
+        roleNoteIsInformational = true;
         roleNote = interaction.guild
           ? '\n\n⚠️ Applicant role is only assigned when `/check` is run in an allowed application ticket category.'
           : '\n\n⚠️ Run this command in the server to assign the applicant role.';
@@ -626,7 +633,7 @@ module.exports = function coreCommands(ctx) {
 
     if (passedCheck) {
       const ok = `✅ **${ign} is eligible** to apply for ${rankLabel}.\nNo issues found.${roleNote}`;
-      if (roleNote) {
+      if (roleNote && !roleNoteIsInformational) {
         embed.setColor(0xffa000);
         embed.setDescription(ok);
       } else {
@@ -660,12 +667,6 @@ module.exports = function coreCommands(ctx) {
         value: hypixelDegradedNote.slice(0, 1024),
         inline: false,
       });
-    } else if (hypixelCacheNote) {
-      embed.addFields({
-        name: 'Hypixel cache',
-        value: hypixelCacheNote.slice(0, 1024),
-        inline: false,
-      });
     }
 
     const headUrl = minecraftHeadUrl(ign);
@@ -673,10 +674,10 @@ module.exports = function coreCommands(ctx) {
 
     await interaction.editReply({ embeds: [embed] });
 
-    if (passedCheck && interaction.guild && interaction.channel && CHECK_RENAME_CATEGORY_IDS.length > 0) {
+    if (passedCheck && interaction.guild && interaction.channel) {
       try {
         const categoryId = checkCategoryId;
-        const shouldRename = categoryId && CHECK_RENAME_CATEGORY_IDS.includes(categoryId);
+        const shouldRename = isAllowedApplicationCategory(categoryId, rankType);
         const prefix = rankTypeToTicketPrefix(rankType);
         if (shouldRename && prefix && typeof interaction.channel.setName === 'function') {
           const nextName = `${prefix}-${ign}`.slice(0, 100);
@@ -800,10 +801,11 @@ module.exports = function coreCommands(ctx) {
 
     const replyMessage = await interaction.editReply({ embeds: [replyEmbed] });
 
-    if (interaction.guild && interaction.channel && CHECK_RENAME_CATEGORY_IDS.length > 0) {
+    if (interaction.guild && interaction.channel) {
       try {
         const categoryId = await resolveChannelCategoryId(interaction.channel, interaction.guild);
-        const shouldPin = categoryId && CHECK_RENAME_CATEGORY_IDS.includes(categoryId);
+        const shouldPin =
+          CHECK_RENAME_CATEGORY_IDS.includes(categoryId) || CHECK_PM_CATEGORY_IDS.includes(categoryId);
         if (shouldPin && typeof replyMessage?.pin === 'function') {
           await replyMessage.pin('Pinned automatically for /score in application ticket');
         }
