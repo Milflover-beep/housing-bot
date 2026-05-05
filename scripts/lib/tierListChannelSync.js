@@ -57,6 +57,17 @@ function displayTierLabel(rawTier) {
 /** Classic bucket layout: one block per exact tier label. */
 function buildTierListEmbedDescription(rows) {
   const buckets = Object.fromEntries(TIER_BUCKET_ORDER.map((tier) => [tier, []]));
+  const newestIgnKeys = new Set(
+    [...rows]
+      .sort((a, b) => {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (bt !== at) return bt - at;
+        return String(a.ign).localeCompare(String(b.ign));
+      })
+      .slice(0, 3)
+      .map((r) => String(r.ign || '').trim().toLowerCase())
+  );
   for (const r of rows) {
     const tier = displayTierLabel(r.tier);
     if (buckets[tier]) buckets[tier].push(r);
@@ -76,8 +87,13 @@ function buildTierListEmbedDescription(rows) {
     if (!list.length) continue;
     hasAny = true;
     lines.push(`${BUCKET_EMOJI[tier] || '⬜'} **${tier}** (${list.length})`);
-    lines.push('```');
-    lines.push(...list.map((r) => `- ${r.ign}`));
+    lines.push('```diff');
+    lines.push(
+      ...list.map((r) => {
+        const ignKey = String(r.ign || '').trim().toLowerCase();
+        return newestIgnKeys.has(ignKey) ? `+ ${r.ign}` : `– ${r.ign}`;
+      })
+    );
     lines.push('```');
     lines.push('');
   }

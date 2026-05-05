@@ -209,7 +209,7 @@ function tierResultsLadderSqlParam(alias = '') {
  * Stale rows from an old ladder (e.g. Prime after moving to Elite) are ignored for public lists.
  */
 function sqlTierResultsPublicListRowsForLadder() {
-  return `SELECT t.ign, t.tier
+  return `SELECT t.ign, t.tier, t.created_at
           FROM (
             SELECT DISTINCT ON (LOWER(TRIM(ign))) *
             FROM tier_results
