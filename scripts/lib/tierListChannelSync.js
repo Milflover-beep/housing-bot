@@ -45,6 +45,7 @@ const BUCKET_EMOJI = {
 };
 
 const TIER_BUCKET_ORDER = ['S', 'A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'N/A'];
+const RECENT_PLACEMENT_HIGHLIGHT_COUNT = 4;
 
 function displayTierLabel(rawTier) {
   const t = String(rawTier || '')
@@ -55,19 +56,8 @@ function displayTierLabel(rawTier) {
 }
 
 /** Classic bucket layout: one block per exact tier label. */
-function buildTierListEmbedDescription(rows) {
+function buildTierListEmbedDescription(rows, highlightedIgnKeys = new Set()) {
   const buckets = Object.fromEntries(TIER_BUCKET_ORDER.map((tier) => [tier, []]));
-  const newestIgnKeys = new Set(
-    [...rows]
-      .sort((a, b) => {
-        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
-        if (bt !== at) return bt - at;
-        return String(a.ign).localeCompare(String(b.ign));
-      })
-      .slice(0, 3)
-      .map((r) => String(r.ign || '').trim().toLowerCase())
-  );
   for (const r of rows) {
     const tier = displayTierLabel(r.tier);
     if (buckets[tier]) buckets[tier].push(r);
@@ -91,7 +81,7 @@ function buildTierListEmbedDescription(rows) {
     lines.push(
       ...list.map((r) => {
         const ignKey = String(r.ign || '').trim().toLowerCase();
-        return newestIgnKeys.has(ignKey) ? `+ ${r.ign}` : `– ${r.ign}`;
+        return highlightedIgnKeys.has(ignKey) ? `+ ${r.ign}` : `– ${r.ign}`;
       })
     );
     lines.push('```');
@@ -106,13 +96,29 @@ function buildTierListEmbedDescription(rows) {
 async function buildCombinedEmbeds(pool) {
   /** Visual order: Apex (top) → Elite → Prime (bottom). */
   const letters = ['A', 'E', 'P'];
+  const recentRes = await pool.query(
+    `SELECT t.ign, t.created_at
+     FROM (
+       SELECT DISTINCT ON (LOWER(TRIM(ign))) *
+       FROM tier_results
+       ORDER BY LOWER(TRIM(ign)), id DESC
+     ) t
+     WHERE LOWER(TRIM(t.type)) IN ('p', 'prime', 'e', 'elite', 'a', 'apex')
+       AND COALESCE(TRIM(t.tier), '') <> ''
+     ORDER BY t.created_at DESC NULLS LAST, LOWER(TRIM(t.ign)) ASC
+     LIMIT $1`,
+    [RECENT_PLACEMENT_HIGHLIGHT_COUNT]
+  );
+  const highlightedIgnKeys = new Set(
+    recentRes.rows.map((r) => String(r.ign || '').trim().toLowerCase()).filter(Boolean)
+  );
   const embeds = [];
   for (const letter of letters) {
     const res = await pool.query(selectCurrentTierRowsSql(), [letter]);
     const rows = [...res.rows];
     const typeName = typeLetterToName(letter);
     const heading = tierListEmbedHeading(typeName);
-    const body = buildTierListEmbedDescription(rows);
+    const body = buildTierListEmbedDescription(rows, highlightedIgnKeys);
     const desc = `${heading}\n\n${body}`.slice(0, 4096);
     embeds.push(
       new EmbedBuilder().setColor(LADDER_COLORS[letter] || 0x5865f2).setDescription(desc)
