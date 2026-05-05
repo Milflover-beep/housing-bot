@@ -208,7 +208,7 @@ module.exports = function applicationsCommands(ctx) {
       ign,
       discordMention: `<@${discordUser.id}>`,
       rankType: RANK_LABEL[typeStr] || typeStr,
-      cooldown: isPmDeny ? 'None (PM deny)' : `<t:${Math.floor(cooldownUntil.getTime() / 1000)}:F>`,
+      cooldown: isPmDeny ? 'None' : `<t:${Math.floor(cooldownUntil.getTime() / 1000)}:F>`,
       handledBy: `<@${interaction.user.id}>`,
     });
   }
