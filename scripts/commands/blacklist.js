@@ -11,6 +11,18 @@ module.exports = function blacklistCommands(ctx) {
     resolveIgnIdentity,
   } = ctx;
 
+  const BLACKLIST_TYPE_CHOICES = [
+    { name: 'Type A (Cheating)', value: 'Type A (Cheating)' },
+    { name: 'Type A.2 (Cheating II)', value: 'Type A.2 (Cheating II)' },
+    { name: 'Type A.3 (Logging)', value: 'Type A.3 (Logging)' },
+    { name: 'Type B (Security)', value: 'Type B (Security)' },
+    { name: 'Type C (Security II)', value: 'Type C (Security II)' },
+    { name: 'Type C.2 (Security III)', value: 'Type C.2 (Security III)' },
+    { name: 'Type D (Conduct)', value: 'Type D (Conduct)' },
+    { name: 'Type E (Conduct II)', value: 'Type E (Conduct II)' },
+    { name: 'Type F (Conduct III)', value: 'Type F (Conduct III)' },
+  ];
+
   async function handleBlacklist(interaction) {
     await defer(interaction, true);
     if (!requireLevel(interaction.member, 3)) {
@@ -18,7 +30,9 @@ module.exports = function blacklistCommands(ctx) {
     }
     const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
     const ign = identity.canonicalIgn || identity.ign;
-    const reason = interaction.options.getString('reason');
+    const type = interaction.options.getString('type', true);
+    const details = interaction.options.getString('details');
+    const reason = details ? `${type} — ${details}` : type;
     const duration = interaction.options.getString('duration');
     const expires = parseDurationToDate(duration);
     if (expires === undefined) {
@@ -130,9 +144,21 @@ module.exports = function blacklistCommands(ctx) {
   const commands = [
     new SlashCommandBuilder()
       .setName('blacklist')
-      .setDescription('Blacklist a player with specified duration and reason')
+      .setDescription('Blacklist a player with a category type and optional details')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .addStringOption((o) => o.setName('reason').setDescription('Reason').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('type')
+          .setDescription('Blacklist category type')
+          .setRequired(true)
+          .addChoices(...BLACKLIST_TYPE_CHOICES)
+      )
+      .addStringOption((o) =>
+        o
+          .setName('details')
+          .setDescription('Optional case-specific context')
+          .setRequired(false)
+      )
       .addStringOption((o) =>
         o
           .setName('duration')
