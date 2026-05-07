@@ -878,6 +878,21 @@ module.exports = function coreCommands(ctx) {
          LIMIT 3000`,
         [ignAliases]
       );
+      const discordIdRow = await pool.query(
+        `SELECT discord_id
+         FROM tier_results
+         WHERE LOWER(TRIM(ign)) = ANY($1::text[])
+           AND COALESCE(TRIM(discord_id), '') <> ''
+         ORDER BY id DESC
+         LIMIT 1`,
+        [ignAliases]
+      );
+      const discordId = String(discordIdRow.rows[0]?.discord_id || '').trim();
+      baseFields.push({
+        name: 'Debug identity',
+        value: discordId ? `Discord: <@${discordId}> (\`${discordId}\`)` : 'Discord: _Not found_',
+        inline: false,
+      });
       baseFields.push(...buildFightHistoryDebugFields(ignAliases, debugRows.rows));
       if (debugRows.rows.length >= 3000) {
         debugFooterNote = ' · Debug stats use first 3000 fights';
