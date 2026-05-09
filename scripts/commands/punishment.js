@@ -802,7 +802,9 @@ module.exports = function punishmentCommands(ctx) {
     }
     const chunks = r.rows.map(
       (row) =>
-        `**#${row.id}** (${punishmentTypeLabel(row.punishment)})\nDetails: ${row.punishment_details || '—'}\nEvidence: ${row.evidence || '—'}\nStatus: ${
+        `**#${row.id}** (${punishmentTypeLabel(row.punishment)})\nDate: ${
+          row.created_at ? new Date(row.created_at).toLocaleString() : '—'
+        }\nDetails: ${row.punishment_details || '—'}\nEvidence: ${row.evidence || '—'}\nStatus: ${
           row.status
         } / ${row.punishment_status}\n`
     );
