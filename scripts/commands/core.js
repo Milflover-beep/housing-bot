@@ -38,6 +38,8 @@ module.exports = function coreCommands(ctx) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const HELP_BOOSTER_COOLDOWN_MS = 5 * 60 * 1000;
+  const helpBoosterCooldownByUser = new Map();
   const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
   function rankTypeToTicketPrefix(rankType) {
@@ -1151,6 +1153,20 @@ module.exports = function coreCommands(ctx) {
     const member = await resolveGuildMember(interaction);
     if (!member || (!hasBoosterRole(member) && getMemberLevel(member) < 4)) {
       return interaction.editReply({ content: '❌ Booster or Admin+ only.' });
+    }
+    const memberLevel = getMemberLevel(member);
+    const isAdminPlus = memberLevel >= 4;
+    if (!isAdminPlus && hasBoosterRole(member)) {
+      const now = Date.now();
+      const lastUsed = helpBoosterCooldownByUser.get(interaction.user.id) || 0;
+      const remainingMs = HELP_BOOSTER_COOLDOWN_MS - (now - lastUsed);
+      if (remainingMs > 0) {
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        return interaction.editReply({
+          content: `⏳ You can use \`/help\` again in about **${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}**.`,
+        });
+      }
+      helpBoosterCooldownByUser.set(interaction.user.id, now);
     }
     const roleId = parseRoleIdList('PUNISHMENT_STAFF_ROLE_ID')[0];
     if (!roleId) {
