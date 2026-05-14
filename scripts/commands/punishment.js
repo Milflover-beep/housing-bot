@@ -861,18 +861,36 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const r = await pool.query(
-      `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
-       FROM punishment_logs
-       WHERE status = 'active' AND punishment_status = 'active'
-         AND (
-           COALESCE(TRIM(cooldown_raw), '') = '-1'
-           OR reversal_remind_at IS NULL
-           OR reversal_remind_at > NOW()
-         )
-       ORDER BY created_at DESC
-       LIMIT 200`
-    );
+    let r;
+    try {
+      r = await pool.query(
+        `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
+         FROM punishment_logs
+         WHERE status = 'active' AND punishment_status = 'active'
+           AND (
+             COALESCE(TRIM(cooldown_raw), '') = '-1'
+             OR reversal_remind_at IS NULL
+             OR reversal_remind_at > NOW()
+           )
+         ORDER BY created_at DESC
+         LIMIT 200`
+      );
+    } catch (e) {
+      const missingPunishmentColumn = e && e.code === '42703' && /punishment/i.test(String(e.message || ''));
+      if (!missingPunishmentColumn) throw e;
+      r = await pool.query(
+        `SELECT id, user_ign, NULL::text AS punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
+         FROM punishment_logs
+         WHERE status = 'active' AND punishment_status = 'active'
+           AND (
+             COALESCE(TRIM(cooldown_raw), '') = '-1'
+             OR reversal_remind_at IS NULL
+             OR reversal_remind_at > NOW()
+           )
+         ORDER BY created_at DESC
+         LIMIT 200`
+      );
+    }
     if (r.rows.length === 0) {
       return interaction.editReply({ content: 'No active punishments right now.' });
     }
