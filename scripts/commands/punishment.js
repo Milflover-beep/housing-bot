@@ -4,6 +4,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } = require('discord.js');
 const { getPunishmentPingsChannelId } = require('../lib/punishmentExpiryPoller');
 
@@ -931,15 +932,37 @@ module.exports = function punishmentCommands(ctx) {
           row.punishment_details || 'no details'
         ).slice(0, 60)} — remaining: ${remaining}`;
       });
-      const body = lines.join('\n');
-      const MAX_CONTENT = 2000;
-      const TRUNCATED_SUFFIX = '\n...and more. Use a tighter filter command if needed.';
+      const PAGE_BODY_MAX = 1800;
+      const pages = [];
+      let current = '';
+      for (const line of lines) {
+        const next = current ? `${current}\n${line}` : line;
+        if (next.length > PAGE_BODY_MAX && current) {
+          pages.push(current);
+          current = line;
+        } else if (next.length > PAGE_BODY_MAX) {
+          pages.push(line.slice(0, PAGE_BODY_MAX));
+          current = '';
+        } else {
+          current = next;
+        }
+      }
+      if (current) pages.push(current);
+      if (!pages.length) pages.push('_No rows._');
+
+      const formatPage = (body, idx, total) =>
+        `**Active punishments** (page ${idx + 1}/${total})\n${body}`.slice(0, 2000);
+
       await interaction.editReply({
-        content:
-          body.length <= MAX_CONTENT
-            ? body
-            : `${body.slice(0, MAX_CONTENT - TRUNCATED_SUFFIX.length)}${TRUNCATED_SUFFIX}`,
+        content: formatPage(pages[0], 0, pages.length),
       });
+
+      for (let i = 1; i < pages.length; i += 1) {
+        await interaction.followUp({
+          content: formatPage(pages[i], i, pages.length),
+          flags: MessageFlags.Ephemeral,
+        });
+      }
     } catch (e) {
       console.error('activepunishments:', e);
       const detail = String(e?.message || e).slice(0, 220);
