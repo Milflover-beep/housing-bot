@@ -932,11 +932,13 @@ module.exports = function punishmentCommands(ctx) {
         ).slice(0, 60)} — remaining: ${remaining}`;
       });
       const body = lines.join('\n');
+      const MAX_CONTENT = 2000;
+      const TRUNCATED_SUFFIX = '\n...and more. Use a tighter filter command if needed.';
       await interaction.editReply({
         content:
-          body.length <= 3900
+          body.length <= MAX_CONTENT
             ? body
-            : `${body.slice(0, 3850)}\n...and more. Use a tighter filter command if needed.`,
+            : `${body.slice(0, MAX_CONTENT - TRUNCATED_SUFFIX.length)}${TRUNCATED_SUFFIX}`,
       });
     } catch (e) {
       console.error('activepunishments:', e);
