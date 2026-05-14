@@ -861,63 +861,90 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    let r;
     try {
-      r = await pool.query(
-        `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
-         FROM punishment_logs
-         WHERE status = 'active' AND punishment_status = 'active'
-           AND (
-             COALESCE(TRIM(cooldown_raw), '') = '-1'
-             OR reversal_remind_at IS NULL
-             OR reversal_remind_at > NOW()
-           )
-         ORDER BY created_at DESC
-         LIMIT 200`
-      );
-    } catch (e) {
-      // Backward-compatible fallback for older schemas missing newer punishment columns.
-      const maybeMissingColumn = e && e.code === '42703';
-      if (!maybeMissingColumn) throw e;
-      r = await pool.query(
-        `SELECT
-           id,
-           user_ign,
-           NULL::text AS punishment,
-           punishment_details,
-           NULL::text AS cooldown_raw,
-           NULL::timestamptz AS reversal_remind_at,
-           created_at
-         FROM punishment_logs
-         WHERE status = 'active' AND punishment_status = 'active'
-         ORDER BY created_at DESC
-         LIMIT 200`
-      );
-    }
-    if (r.rows.length === 0) {
-      return interaction.editReply({ content: 'No active punishments right now.' });
-    }
-    const lines = r.rows.map((row) => {
-      let remaining = 'unknown';
-      if (String(row.cooldown_raw || '').trim() === '-1') {
-        remaining = 'permanent';
-      } else if (row.reversal_remind_at) {
-        const endAt = new Date(row.reversal_remind_at);
-        remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
+      let r;
+      try {
+        r = await pool.query(
+          `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
+           FROM punishment_logs
+           WHERE status = 'active' AND punishment_status = 'active'
+             AND (
+               COALESCE(TRIM(cooldown_raw), '') = '-1'
+               OR reversal_remind_at IS NULL
+               OR reversal_remind_at > NOW()
+             )
+           ORDER BY created_at DESC
+           LIMIT 200`
+        );
+      } catch (e) {
+        const maybeMissingColumn = e && e.code === '42703';
+        if (!maybeMissingColumn) throw e;
+        try {
+          // Backward-compatible fallback for schemas missing newer punishment columns.
+          r = await pool.query(
+            `SELECT
+               id,
+               user_ign,
+               NULL::text AS punishment,
+               punishment_details,
+               NULL::text AS cooldown_raw,
+               NULL::timestamptz AS reversal_remind_at,
+               created_at
+             FROM punishment_logs
+             WHERE status = 'active' AND punishment_status = 'active'
+             ORDER BY created_at DESC
+             LIMIT 200`
+          );
+        } catch (e2) {
+          const maybeMissingStatusColumns = e2 && e2.code === '42703';
+          if (!maybeMissingStatusColumns) throw e2;
+          // Ultra-legacy fallback: no status fields available.
+          r = await pool.query(
+            `SELECT
+               id,
+               user_ign,
+               NULL::text AS punishment,
+               punishment_details,
+               NULL::text AS cooldown_raw,
+               NULL::timestamptz AS reversal_remind_at,
+               created_at
+             FROM punishment_logs
+             ORDER BY created_at DESC
+             LIMIT 200`
+          );
+        }
       }
-      return `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(
-        punishmentTypeLabel(row.punishment)
-      )} — ${(
-        row.punishment_details || 'no details'
-      ).slice(0, 60)} — remaining: ${remaining}`;
-    });
-    const body = lines.join('\n');
-    await interaction.editReply({
-      content:
-        body.length <= 3900
-          ? body
-          : `${body.slice(0, 3850)}\n...and more. Use a tighter filter command if needed.`,
-    });
+      if (r.rows.length === 0) {
+        return interaction.editReply({ content: 'No active punishments right now.' });
+      }
+      const lines = r.rows.map((row) => {
+        let remaining = 'unknown';
+        if (String(row.cooldown_raw || '').trim() === '-1') {
+          remaining = 'permanent';
+        } else if (row.reversal_remind_at) {
+          const endAt = new Date(row.reversal_remind_at);
+          remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
+        }
+        return `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(
+          punishmentTypeLabel(row.punishment)
+        )} — ${(
+          row.punishment_details || 'no details'
+        ).slice(0, 60)} — remaining: ${remaining}`;
+      });
+      const body = lines.join('\n');
+      await interaction.editReply({
+        content:
+          body.length <= 3900
+            ? body
+            : `${body.slice(0, 3850)}\n...and more. Use a tighter filter command if needed.`,
+      });
+    } catch (e) {
+      console.error('activepunishments:', e);
+      const detail = String(e?.message || e).slice(0, 220);
+      await interaction.editReply({
+        content: `❌ Could not fetch active punishments: ${detail}`,
+      });
+    }
   }
 
   const commands = [
