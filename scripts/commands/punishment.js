@@ -876,17 +876,20 @@ module.exports = function punishmentCommands(ctx) {
          LIMIT 200`
       );
     } catch (e) {
-      const missingPunishmentColumn = e && e.code === '42703' && /punishment/i.test(String(e.message || ''));
-      if (!missingPunishmentColumn) throw e;
+      // Backward-compatible fallback for older schemas missing newer punishment columns.
+      const maybeMissingColumn = e && e.code === '42703';
+      if (!maybeMissingColumn) throw e;
       r = await pool.query(
-        `SELECT id, user_ign, NULL::text AS punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
+        `SELECT
+           id,
+           user_ign,
+           NULL::text AS punishment,
+           punishment_details,
+           NULL::text AS cooldown_raw,
+           NULL::timestamptz AS reversal_remind_at,
+           created_at
          FROM punishment_logs
          WHERE status = 'active' AND punishment_status = 'active'
-           AND (
-             COALESCE(TRIM(cooldown_raw), '') = '-1'
-             OR reversal_remind_at IS NULL
-             OR reversal_remind_at > NOW()
-           )
          ORDER BY created_at DESC
          LIMIT 200`
       );
