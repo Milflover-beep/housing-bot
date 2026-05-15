@@ -37,7 +37,7 @@ module.exports = function utilityCommands(ctx) {
     {
       key: 'scores',
       label: 'scores',
-      sql: 'SELECT id, winner_ign, loser_ign FROM scores WHERE LOWER(winner_ign) LIKE $1 OR LOWER(loser_ign) LIKE $1 LIMIT 10',
+      sql: 'SELECT id, winner_ign, loser_ign, created_at FROM scores WHERE LOWER(winner_ign) LIKE $1 OR LOWER(loser_ign) LIKE $1 ORDER BY created_at DESC, id DESC LIMIT 10',
     },
     {
       key: 'punishment_logs',
