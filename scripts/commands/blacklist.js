@@ -165,6 +165,13 @@ module.exports = function blacklistCommands(ctx) {
       .setDescription('Blacklist a player with a category type and optional details')
       .addStringOption((o) =>
         o
+          .setName('type')
+          .setDescription('Blacklist category type')
+          .setRequired(true)
+          .addChoices(...BLACKLIST_TYPE_CHOICES)
+      )
+      .addStringOption((o) =>
+        o
           .setName('ign')
           .setDescription('Minecraft IGN (optional if discord is provided)')
           .setRequired(false)
@@ -174,13 +181,6 @@ module.exports = function blacklistCommands(ctx) {
           .setName('discord')
           .setDescription('Discord user (optional if ign is provided)')
           .setRequired(false)
-      )
-      .addStringOption((o) =>
-        o
-          .setName('type')
-          .setDescription('Blacklist category type')
-          .setRequired(true)
-          .addChoices(...BLACKLIST_TYPE_CHOICES)
       )
       .addStringOption((o) =>
         o
