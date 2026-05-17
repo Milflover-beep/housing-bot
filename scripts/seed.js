@@ -139,9 +139,17 @@ async function seed() {
     const blacklists = getRows('blacklists');
     for (const row of blacklists) {
       await client.query(
-        `INSERT INTO blacklists (id, ign, time_length, reason, blacklist_expires, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING`,
-        [row.id, row.ign, row.time_length, row.reason, excelDate(row.blacklist_expires), excelDate(row.created_at)]
+        `INSERT INTO blacklists (id, ign, discord_user_id, time_length, reason, blacklist_expires, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
+        [
+          row.id,
+          row.ign ?? null,
+          row.discord_user_id ?? null,
+          row.time_length,
+          row.reason,
+          excelDate(row.blacklist_expires),
+          excelDate(row.created_at),
+        ]
       );
     }
     console.log(`✓ blacklists: ${blacklists.length} rows`);

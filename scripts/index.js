@@ -16,6 +16,7 @@ const {
   startPunishmentExpiryPoller,
   getPunishmentPingsChannelId,
 } = require('./lib/punishmentExpiryPoller');
+const { startBlacklistExpiryPoller, getBlacklistRoleId } = require('./lib/blacklistExpiryPoller');
 const { build } = require('./commands');
 
 // GuildMembers is privileged — only add after enabling "Server Members Intent" in the
@@ -73,10 +74,14 @@ client.once(Events.ClientReady, async () => {
     console.error('❌ Database schema ensure failed:', err?.message || err);
   }
   startPunishmentExpiryPoller(client, pool);
+  startBlacklistExpiryPoller(client, pool);
   if (!getPunishmentPingsChannelId()) {
     console.warn(
       '⚠️ Punishment ended pings are OFF: set PUNISHMENT_PINGS_CHANNEL_ID, PINGS_CHANNEL_ID, or PUNISHMENT_ACCEPT_NOTIFY_CHANNEL_ID in .env'
     );
+  }
+  if (!getBlacklistRoleId()) {
+    console.warn('⚠️ BLACKLIST_ROLE_ID is unset — blacklist role auto-assign/expiry-remove is OFF.');
   }
   console.log(`✅ Logged in as ${client.user.tag}`);
   const applicantId = process.env.BOT_ROLE_APPLICANT_ID?.trim();

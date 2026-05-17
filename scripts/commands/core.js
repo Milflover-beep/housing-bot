@@ -66,7 +66,7 @@ module.exports = function coreCommands(ctx) {
     return rt === 'pm' && CHECK_PM_CATEGORY_IDS.includes(categoryId);
   }
 
-  async function fetchCheckBaseRows(ignAliases) {
+  async function fetchCheckBaseRows(ignAliases, discordId) {
     const [
       blacklistRows,
       adminBlacklistRows,
@@ -79,9 +79,9 @@ module.exports = function coreCommands(ctx) {
     ] = await Promise.all([
       pool.query(
         `SELECT * FROM blacklists
-         WHERE LOWER(ign) = ANY($1::text[])
+         WHERE (LOWER(ign) = ANY($1::text[]) OR discord_user_id = $2)
            AND (blacklist_expires IS NULL OR blacklist_expires > NOW())`,
-        [ignAliases]
+        [ignAliases, discordId]
       ),
       pool.query(
         `SELECT * FROM admin_blacklists
@@ -93,10 +93,10 @@ module.exports = function coreCommands(ctx) {
       pool.query(
         `SELECT ign, reason, created_at, blacklist_expires
          FROM blacklists
-         WHERE LOWER(ign) = ANY($1::text[])
+         WHERE (LOWER(ign) = ANY($1::text[]) OR discord_user_id = $2)
          ORDER BY created_at DESC
          LIMIT 1`,
-        [ignAliases]
+        [ignAliases, discordId]
       ),
       pool.query(
         `SELECT ign, reason, created_at, blacklist_expires, is_pardoned
@@ -160,8 +160,8 @@ module.exports = function coreCommands(ctx) {
     };
   }
 
-  async function fetchCheckRows({ ignAliases, isPmCheck, hypixelKey, ign }) {
-    const baseRows = await fetchCheckBaseRows(ignAliases);
+  async function fetchCheckRows({ ignAliases, discordId, isPmCheck, hypixelKey, ign }) {
+    const baseRows = await fetchCheckBaseRows(ignAliases, discordId);
     if (isPmCheck) {
       return {
         ...baseRows,
@@ -394,7 +394,7 @@ module.exports = function coreCommands(ctx) {
       watchlistRows,
       allTierRows,
       hypixelResult,
-    } = await fetchCheckRows({ ignAliases, isPmCheck, hypixelKey, ign });
+    } = await fetchCheckRows({ ignAliases, discordId: discord, isPmCheck, hypixelKey, ign });
 
     const adminLevelForAltVisibility = 4;
     const visibleAltRows =

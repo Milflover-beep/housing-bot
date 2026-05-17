@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS apr_logs (
 
 CREATE TABLE IF NOT EXISTS blacklists (
   id                SERIAL PRIMARY KEY,
-  ign               TEXT NOT NULL,
+  ign               TEXT,
+  discord_user_id   TEXT,
   time_length       TEXT,
   reason            TEXT,
   blacklist_expires TIMESTAMPTZ,

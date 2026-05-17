@@ -157,6 +157,12 @@ async function ensureDatabaseSchema(pool) {
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS evidence_link TEXT;
     `);
     await client.query(`
+      ALTER TABLE blacklists ADD COLUMN IF NOT EXISTS discord_user_id TEXT;
+    `).catch(() => {});
+    await client.query(`
+      ALTER TABLE blacklists ALTER COLUMN ign DROP NOT NULL;
+    `).catch(() => {});
+    await client.query(`
       CREATE TABLE IF NOT EXISTS staff_activity_logs (
         id               SERIAL PRIMARY KEY,
         staff_discord_id TEXT NOT NULL,

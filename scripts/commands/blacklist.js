@@ -10,6 +10,7 @@ module.exports = function blacklistCommands(ctx) {
     normalizeIgn,
     resolveIgnIdentity,
   } = ctx;
+  const blacklistRoleId = String(process.env.BLACKLIST_ROLE_ID || '').trim();
 
   const BLACKLIST_TYPE_CHOICES = [
     { name: 'Type A (Cheating)', value: 'Type A (Cheating)' },
@@ -28,8 +29,16 @@ module.exports = function blacklistCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
-    const ign = identity.canonicalIgn || identity.ign;
+    const ignInput = interaction.options.getString('ign');
+    const discordUser = interaction.options.getUser('discord');
+    if (!ignInput && !discordUser) {
+      return interaction.editReply({
+        content: '❌ Provide at least one target: **ign** or **discord**.',
+      });
+    }
+    const identity = ignInput ? await resolveIgnIdentity(pool, ignInput) : null;
+    const ign = identity ? identity.canonicalIgn || identity.ign : null;
+    const discordUserId = discordUser ? String(discordUser.id) : null;
     const type = interaction.options.getString('type', true);
     const details = interaction.options.getString('details');
     const reason = details ? `${type} — ${details}` : type;
@@ -42,14 +51,23 @@ module.exports = function blacklistCommands(ctx) {
       });
     }
     await pool.query(
-      `INSERT INTO blacklists (ign, time_length, reason, blacklist_expires, created_at)
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [ign, duration || 'permanent', reason, expires]
+      `INSERT INTO blacklists (ign, discord_user_id, time_length, reason, blacklist_expires, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [ign, discordUserId, duration || 'permanent', reason, expires]
     );
+    let roleNote = '';
+    if (discordUserId && blacklistRoleId && interaction.guild) {
+      const member = await interaction.guild.members.fetch(discordUserId).catch(() => null);
+      if (member && !member.roles.cache.has(blacklistRoleId)) {
+        await member.roles.add(blacklistRoleId, 'Blacklisted').catch(() => {});
+      }
+    } else if (discordUserId && !blacklistRoleId) {
+      roleNote = '\n⚠️ `BLACKLIST_ROLE_ID` is not configured.';
+    }
     await interaction.editReply({
-      content: `✅ Blacklisted **${ign}**. Reason: ${reason}${
+      content: `✅ Blacklisted **${ign || 'unknown IGN'}**${discordUserId ? ` (<@${discordUserId}>)` : ''}. Reason: ${reason}${
         expires ? ` (expires <t:${Math.floor(expires.getTime() / 1000)}:R>)` : ' (permanent)'
-      }`,
+      }${roleNote}`,
     });
   }
 
@@ -145,7 +163,18 @@ module.exports = function blacklistCommands(ctx) {
     new SlashCommandBuilder()
       .setName('blacklist')
       .setDescription('Blacklist a player with a category type and optional details')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
+      .addStringOption((o) =>
+        o
+          .setName('ign')
+          .setDescription('Minecraft IGN (optional if discord is provided)')
+          .setRequired(false)
+      )
+      .addUserOption((o) =>
+        o
+          .setName('discord')
+          .setDescription('Discord user (optional if ign is provided)')
+          .setRequired(false)
+      )
       .addStringOption((o) =>
         o
           .setName('type')
