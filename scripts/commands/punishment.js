@@ -822,13 +822,65 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const r = await pool.query(
-      `SELECT status, punishment_status, COUNT(*)::int AS c FROM punishment_logs GROUP BY status, punishment_status`
+    let rows;
+    try {
+      const q = await pool.query(
+        `SELECT id, user_ign, punishment_details
+         FROM punishment_logs
+         WHERE LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 5000`
+      );
+      rows = q.rows;
+    } catch (e) {
+      // Older schemas may not have punishment column; treat all rows as ban logs.
+      const missingPunishmentColumn = e && e.code === '42703' && /punishment/i.test(String(e.message || ''));
+      if (!missingPunishmentColumn) throw e;
+      const q = await pool.query(
+        `SELECT id, user_ign, punishment_details
+         FROM punishment_logs
+         ORDER BY created_at DESC, id DESC
+         LIMIT 5000`
+      );
+      rows = q.rows;
+    }
+    if (!rows.length) {
+      return interaction.editReply({ content: 'No ban logs found.' });
+    }
+
+    const lines = rows.map(
+      (row) =>
+        `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(row.punishment_details || 'no reason').slice(0, 120)}`
     );
-    const lines = r.rows.map((row) => `${row.status || '?'} / ${row.punishment_status || '?'}: **${row.c}**`);
+    const PAGE_BODY_MAX = 1800;
+    const pages = [];
+    let current = '';
+    for (const line of lines) {
+      const next = current ? `${current}\n${line}` : line;
+      if (next.length > PAGE_BODY_MAX && current) {
+        pages.push(current);
+        current = line;
+      } else if (next.length > PAGE_BODY_MAX) {
+        pages.push(line.slice(0, PAGE_BODY_MAX));
+        current = '';
+      } else {
+        current = next;
+      }
+    }
+    if (current) pages.push(current);
+    if (!pages.length) pages.push('_No rows._');
+
+    const formatPage = (body, idx, total) =>
+      `**Ban logs** (page ${idx + 1}/${total})\n${body}`.slice(0, 2000);
+
     await interaction.editReply({
-      content: lines.length ? lines.join('\n') : 'No punishment rows.',
+      content: formatPage(pages[0], 0, pages.length),
     });
+    for (let i = 1; i < pages.length; i += 1) {
+      await interaction.followUp({
+        content: formatPage(pages[i], i, pages.length),
+      });
+    }
   }
 
   async function handleRemovepunishment(interaction) {
@@ -1042,7 +1094,7 @@ module.exports = function punishmentCommands(ctx) {
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('totalhistory')
-      .setDescription('View all punishments by status (Staff only)'),
+      .setDescription('List ban logs with ID, IGN, and reason (Staff only)'),
     new SlashCommandBuilder()
       .setName('activepunishments')
       .setDescription('List active punishments with IDs'),

@@ -32,25 +32,49 @@ module.exports = function utilityCommands(ctx) {
   const { pool, requireLevel, isOwner, defer, normalizeIgn } = ctx;
 
   const FIND_TARGETS = [
-    { key: 'blacklists', label: 'blacklists', sql: 'SELECT id, ign FROM blacklists WHERE LOWER(ign) LIKE $1 LIMIT 10' },
-    { key: 'tier_results', label: 'tier_results', sql: 'SELECT id, ign, type, tier FROM tier_results WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+    {
+      key: 'blacklists',
+      label: 'blacklists',
+      sql: 'SELECT id, ign FROM blacklists WHERE LOWER(ign) LIKE $1 LIMIT 10',
+      sqlById: 'SELECT id, ign FROM blacklists WHERE id = $1 LIMIT 10',
+    },
+    {
+      key: 'tier_results',
+      label: 'tier_results',
+      sql: 'SELECT id, ign, type, tier FROM tier_results WHERE LOWER(ign) LIKE $1 LIMIT 10',
+      sqlById: 'SELECT id, ign, type, tier FROM tier_results WHERE id = $1 LIMIT 10',
+    },
     {
       key: 'scores',
       label: 'scores',
       sql: 'SELECT id, winner_ign, loser_ign, created_at FROM scores WHERE LOWER(winner_ign) LIKE $1 OR LOWER(loser_ign) LIKE $1 ORDER BY created_at DESC, id DESC LIMIT 10',
+      sqlById: 'SELECT id, winner_ign, loser_ign, created_at FROM scores WHERE id = $1 LIMIT 10',
     },
     {
       key: 'punishment_logs',
       label: 'punishment_logs',
       sql: 'SELECT id, user_ign, staff_ign, punishment, punishment_status FROM punishment_logs WHERE LOWER(user_ign) LIKE $1 LIMIT 10',
+      sqlById:
+        'SELECT id, user_ign, staff_ign, punishment, punishment_status FROM punishment_logs WHERE id = $1 LIMIT 10',
     },
-    { key: 'reports', label: 'reports', sql: 'SELECT id, ign, punishment_issued FROM reports WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+    {
+      key: 'reports',
+      label: 'reports',
+      sql: 'SELECT id, ign, punishment_issued FROM reports WHERE LOWER(ign) LIKE $1 LIMIT 10',
+      sqlById: 'SELECT id, ign, punishment_issued FROM reports WHERE id = $1 LIMIT 10',
+    },
     {
       key: 'alts',
       label: 'alts',
       sql: 'SELECT id, original_ign, alt_ign FROM alts WHERE LOWER(original_ign) LIKE $1 OR LOWER(alt_ign) LIKE $1 LIMIT 10',
+      sqlById: 'SELECT id, original_ign, alt_ign FROM alts WHERE id = $1 LIMIT 10',
     },
-    { key: 'uuid_registry', label: 'uuid_registry', sql: 'SELECT id, ign, uuid FROM uuid_registry WHERE LOWER(ign) LIKE $1 LIMIT 10' },
+    {
+      key: 'uuid_registry',
+      label: 'uuid_registry',
+      sql: 'SELECT id, ign, uuid FROM uuid_registry WHERE LOWER(ign) LIKE $1 LIMIT 10',
+      sqlById: 'SELECT id, ign, uuid FROM uuid_registry WHERE id = $1 LIMIT 10',
+    },
   ];
 
   async function handleUpdate(interaction) {
@@ -106,20 +130,32 @@ module.exports = function utilityCommands(ctx) {
     if (!requireLevel(interaction.member, 4)) {
       return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
-    const q = `%${normalizeIgn(interaction.options.getString('query'))}%`;
+    const rawQuery = interaction.options.getString('query');
+    const normalizedQuery = rawQuery ? normalizeIgn(rawQuery) : '';
+    const q = normalizedQuery ? `%${normalizedQuery}%` : null;
+    const id = interaction.options.getInteger('id');
+    if (!Number.isFinite(id) && !q) {
+      return interaction.editReply({
+        content:
+          '❌ Provide at least one search input: **id** (exact row id) or **query** (text match).',
+      });
+    }
     const target = interaction.options.getString('target') || 'all';
     const tables = target === 'all' ? FIND_TARGETS : FIND_TARGETS.filter((t) => t.key === target);
     const available = FIND_TARGETS.map((t) => `\`${t.key}\``).join(', ');
     const lines = [];
     for (const table of tables) {
-      const r = await pool.query(table.sql, [q]);
+      const useIdSearch = Number.isFinite(id) && typeof table.sqlById === 'string';
+      if (!useIdSearch && !q) continue;
+      const r = useIdSearch ? await pool.query(table.sqlById, [id]) : await pool.query(table.sql, [q]);
       if (r.rows.length) {
         lines.push(`**${table.label}**: ${r.rows.map((row) => JSON.stringify(row)).join('; ')}`);
       }
     }
-    const body = lines.join('\n').slice(0, 3700) || 'No hits.';
+    const searchMode = Number.isFinite(id) ? `id=${id}` : `query=${rawQuery}`;
+    const body = lines.join('\n').slice(0, 3600) || 'No hits.';
     await interaction.editReply({
-      content: `Searchable targets: ${available}\n${body}`,
+      content: `Search mode: ${searchMode}\nSearchable targets: ${available}\n${body}`,
     });
   }
 
@@ -189,8 +225,20 @@ module.exports = function utilityCommands(ctx) {
       .addStringOption((o) => o.setName('new-ign').setDescription('New IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('find')
-      .setDescription('Search IGN entries across moderation/player tables (Admin+)')
-      .addStringOption((o) => o.setName('query').setDescription('Substring to search').setRequired(true))
+      .setDescription('Find rows by ID or text across moderation/player tables (Admin+)')
+      .addStringOption((o) =>
+        o
+          .setName('query')
+          .setDescription('Optional text query (IGN/name substring)')
+          .setRequired(false)
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('id')
+          .setDescription('Optional exact row ID lookup (e.g. punishment log id)')
+          .setRequired(false)
+          .setMinValue(1)
+      )
       .addStringOption((o) =>
         o
           .setName('target')
