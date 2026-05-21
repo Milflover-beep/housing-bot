@@ -94,7 +94,8 @@ module.exports = function punishmentCommands(ctx) {
       [userIgn, normalizedType]
     );
     const acceptedCount = r.rows[0]?.c || 0;
-    const days = 3 * Math.pow(2, acceptedCount);
+    const multiplier = normalizedType === 'ban' ? 4 : 2;
+    const days = 3 * Math.pow(multiplier, acceptedCount);
     return `${days}d`;
   }
 
@@ -531,7 +532,11 @@ module.exports = function punishmentCommands(ctx) {
       await interaction.editReply({
         content:
           `✅ Logged ${punishmentTypeLabel(punishmentType).toLowerCase()} punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
-          `Duration set to **${cooldownRaw}** (progressive 3d -> 6d -> 12d...). Use **/checkqueue** (pages + Accept/Deny).`,
+          `Duration set to **${cooldownRaw}** (${
+            String(punishmentType || '').toLowerCase() === 'ban'
+              ? 'progressive 3d -> 12d -> 48d...'
+              : 'progressive 3d -> 6d -> 12d...'
+          }). Use **/checkqueue** (pages + Accept/Deny).`,
       });
     } catch (e) {
       console.error('handleLog:', e);
