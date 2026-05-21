@@ -825,16 +825,16 @@ module.exports = function punishmentCommands(ctx) {
     try {
       let rows = [];
       const attempts = [
-        `SELECT id, user_ign, punishment_details
+        `SELECT id, user_ign, punishment_details, created_at
          FROM punishment_logs
          WHERE LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
          ORDER BY created_at DESC, id DESC
          LIMIT 5000`,
-        `SELECT id, user_ign, punishment_details
+        `SELECT id, user_ign, punishment_details, created_at
          FROM punishment_logs
          ORDER BY created_at DESC, id DESC
          LIMIT 5000`,
-        `SELECT id, user_ign, punishment_details
+        `SELECT id, user_ign, punishment_details, created_at
          FROM punishment_logs
          ORDER BY id DESC
          LIMIT 5000`,
@@ -897,6 +897,7 @@ module.exports = function punishmentCommands(ctx) {
       for (let i = 1; i < shownPages; i += 1) {
         await interaction.followUp({
           content: formatPage(pages[i], i, shownPages, totalPages > MAX_PAGES),
+          flags: MessageFlags.Ephemeral,
         });
       }
     } catch (e) {
