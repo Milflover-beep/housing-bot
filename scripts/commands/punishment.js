@@ -822,63 +822,86 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    let rows;
     try {
-      const q = await pool.query(
+      let rows = [];
+      const attempts = [
         `SELECT id, user_ign, punishment_details
          FROM punishment_logs
          WHERE LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
          ORDER BY created_at DESC, id DESC
-         LIMIT 5000`
-      );
-      rows = q.rows;
-    } catch (e) {
-      // Older schemas may not have punishment column; treat all rows as ban logs.
-      const missingPunishmentColumn = e && e.code === '42703' && /punishment/i.test(String(e.message || ''));
-      if (!missingPunishmentColumn) throw e;
-      const q = await pool.query(
+         LIMIT 5000`,
         `SELECT id, user_ign, punishment_details
          FROM punishment_logs
          ORDER BY created_at DESC, id DESC
-         LIMIT 5000`
-      );
-      rows = q.rows;
-    }
-    if (!rows.length) {
-      return interaction.editReply({ content: 'No ban logs found.' });
-    }
-
-    const lines = rows.map(
-      (row) =>
-        `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(row.punishment_details || 'no reason').slice(0, 120)}`
-    );
-    const PAGE_BODY_MAX = 1800;
-    const pages = [];
-    let current = '';
-    for (const line of lines) {
-      const next = current ? `${current}\n${line}` : line;
-      if (next.length > PAGE_BODY_MAX && current) {
-        pages.push(current);
-        current = line;
-      } else if (next.length > PAGE_BODY_MAX) {
-        pages.push(line.slice(0, PAGE_BODY_MAX));
-        current = '';
-      } else {
-        current = next;
+         LIMIT 5000`,
+        `SELECT id, user_ign, punishment_details
+         FROM punishment_logs
+         ORDER BY id DESC
+         LIMIT 5000`,
+      ];
+      let lastErr = null;
+      for (const sql of attempts) {
+        try {
+          const q = await pool.query(sql);
+          rows = q.rows;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+        }
       }
-    }
-    if (current) pages.push(current);
-    if (!pages.length) pages.push('_No rows._');
+      if (lastErr) throw lastErr;
 
-    const formatPage = (body, idx, total) =>
-      `**Ban logs** (page ${idx + 1}/${total})\n${body}`.slice(0, 2000);
+      if (!rows.length) {
+        return interaction.editReply({ content: 'No ban logs found.' });
+      }
 
-    await interaction.editReply({
-      content: formatPage(pages[0], 0, pages.length),
-    });
-    for (let i = 1; i < pages.length; i += 1) {
-      await interaction.followUp({
-        content: formatPage(pages[i], i, pages.length),
+      const lines = rows.map(
+        (row) =>
+          `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(row.punishment_details || 'no reason').slice(0, 120)}`
+      );
+      const PAGE_BODY_MAX = 1750;
+      const MAX_PAGES = 10;
+      const pages = [];
+      let current = '';
+      for (const line of lines) {
+        const next = current ? `${current}\n${line}` : line;
+        if (next.length > PAGE_BODY_MAX && current) {
+          pages.push(current);
+          current = line;
+        } else if (next.length > PAGE_BODY_MAX) {
+          pages.push(line.slice(0, PAGE_BODY_MAX));
+          current = '';
+        } else {
+          current = next;
+        }
+      }
+      if (current) pages.push(current);
+      if (!pages.length) pages.push('_No rows._');
+
+      const totalPages = pages.length;
+      const shownPages = Math.min(totalPages, MAX_PAGES);
+      const formatPage = (body, idx, total, truncated) => {
+        const suffix =
+          truncated && idx === total - 1
+            ? `\n\n⚠️ Showing first ${MAX_PAGES} pages only.`
+            : '';
+        return `**Ban logs** (page ${idx + 1}/${totalPages})\n${body}${suffix}`.slice(0, 2000);
+      };
+
+      await interaction.editReply({
+        content: formatPage(pages[0], 0, shownPages, totalPages > MAX_PAGES),
+      });
+      for (let i = 1; i < shownPages; i += 1) {
+        await interaction.followUp({
+          content: formatPage(pages[i], i, shownPages, totalPages > MAX_PAGES),
+        });
+      }
+    } catch (e) {
+      console.error('totalhistory:', e);
+      const detail = String(e?.message || e).slice(0, 220);
+      await interaction.editReply({
+        content: `❌ Could not load total history: ${detail}`,
       });
     }
   }
