@@ -1081,7 +1081,6 @@ module.exports = function coreCommands(ctx) {
         '`/history`',
         '`/staffstats`',
         '`/viewblacklist`',
-        '`/totalhistory`',
         '`/activepunishments`',
       ]);
     }
@@ -1096,6 +1095,7 @@ module.exports = function coreCommands(ctx) {
         '`/viewwatchlist`',
         '`/checkqueue`',
         '`/getproof`',
+        '`/totalhistory`',
         '`/removepunishment`',
         '`/blacklist`',
         '`/bancheck`',

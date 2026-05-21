@@ -818,9 +818,9 @@ module.exports = function punishmentCommands(ctx) {
   }
 
   async function handleTotalhistory(interaction) {
-    await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    await defer(interaction, true);
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     try {
       let rows = [];
@@ -858,7 +858,9 @@ module.exports = function punishmentCommands(ctx) {
 
       const lines = rows.map(
         (row) =>
-          `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(row.punishment_details || 'no reason').slice(0, 120)}`
+          `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${
+            row.created_at ? new Date(row.created_at).toLocaleString() : '—'
+          } — ${(row.punishment_details || 'no reason').slice(0, 120)}`
       );
       const PAGE_BODY_MAX = 1750;
       const MAX_PAGES = 10;
@@ -1117,7 +1119,7 @@ module.exports = function punishmentCommands(ctx) {
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('totalhistory')
-      .setDescription('List ban logs with ID, IGN, and reason (Staff only)'),
+      .setDescription('List ban logs with ID, IGN, date, and reason (Manager+ only)'),
     new SlashCommandBuilder()
       .setName('activepunishments')
       .setDescription('List active punishments with IDs'),
