@@ -1,10 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function pmCommands(ctx) {
   const {
     pool,
     requireLevel,
-    isAdminOrOwner,
     defer,
     normalizeIgn,
     resolveIgnIdentity,
@@ -350,10 +349,10 @@ module.exports = function pmCommands(ctx) {
   async function handleDeletepm(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!isAdminOrOwner(member, interaction.user.id)) {
+    if (!requireLevel(member, 3)) {
       return interaction.editReply({
         content:
-          '❌ Admin or owner only. If you have the role, enable **Server Members Intent** for the bot and restart it.',
+          '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot and restart it.',
       });
     }
     const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
@@ -780,11 +779,10 @@ module.exports = function pmCommands(ctx) {
       .addStringOption((o) => o.setName('uuid').setDescription('UUID (optional)').setRequired(false)),
     new SlashCommandBuilder()
       .setName('deletepm')
-      .setDescription('Delete a PM from the list by Minecraft IGN (Admin Only)')
+      .setDescription('Delete a PM from the list by Minecraft IGN (Manager+)')
       .addStringOption((o) =>
         o.setName('ign').setDescription('Minecraft IGN to remove').setRequired(true)
-      )
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      ),
     new SlashCommandBuilder()
       .setName('editpm')
       .setDescription("Edit a PM's IGN, ping, and/or manager type (Prime / Elite / Apex)")

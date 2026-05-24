@@ -14,8 +14,6 @@ const modules = [
   require('./punishment'),
   require('./reports'),
   require('./fights'),
-  require('./proxies'),
-  require('./uuid'),
   require('./role'),
   require('./utility'),
   require('./discordExtras'),

@@ -638,8 +638,8 @@ module.exports = function punishmentCommands(ctx) {
 
   async function handleStaffstats(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 2)) {
-      return interaction.editReply({ content: '❌ Staff or higher only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const staffUser = interaction.options.getUser('discord', true);
     const staffId = String(staffUser.id);

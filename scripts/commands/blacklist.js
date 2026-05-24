@@ -7,7 +7,6 @@ module.exports = function blacklistCommands(ctx) {
     isAdminOrOwner,
     parseDurationToDate,
     defer,
-    normalizeIgn,
     resolveIgnIdentity,
   } = ctx;
   const blacklistRoleId = String(process.env.BLACKLIST_ROLE_ID || '').trim();
@@ -80,10 +79,12 @@ module.exports = function blacklistCommands(ctx) {
     const id = interaction.options.getInteger('id');
     if (table === 'admin_blacklists') {
       await pool.query('UPDATE admin_blacklists SET is_pardoned = true WHERE id = $1', [id]);
-    } else {
-      await pool.query('DELETE FROM blacklists WHERE id = $1', [id]);
+      return interaction.editReply({
+        content: `✅ Marked premium blacklist entry **#${id}** as pardoned.`,
+      });
     }
-    await interaction.editReply({ content: `✅ Pardoned / removed entry **#${id}** from **${table}**.` });
+    await pool.query('DELETE FROM blacklists WHERE id = $1', [id]);
+    await interaction.editReply({ content: `✅ Removed blacklist entry **#${id}**.` });
   }
 
   async function handleViewblacklist(interaction) {
@@ -91,15 +92,53 @@ module.exports = function blacklistCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
-    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
-    const ign = identity.canonicalIgn || identity.ign;
-    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
+    const ignInput = interaction.options.getString('ign');
+    const discordUser = interaction.options.getUser('discord');
+    if (!ignInput && !discordUser) {
+      return interaction.editReply({ content: '❌ Provide **ign** or **discord**.' });
+    }
+    const identity = ignInput ? await resolveIgnIdentity(pool, ignInput) : null;
+    const ign = identity ? identity.canonicalIgn || identity.ign : 'unknown';
+    const ignAliases = identity?.aliases?.length ? identity.aliases : [];
+    const discordUserId = discordUser ? String(discordUser.id) : null;
     const r = await pool.query(
-      'SELECT * FROM blacklists WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 20',
-      [ignAliases]
+      `SELECT * FROM (
+         SELECT
+           'blacklists' AS source_table,
+           id,
+           ign,
+           discord_user_id,
+           reason,
+           time_length,
+           blacklist_expires,
+           created_at,
+           NULL::boolean AS is_pardoned
+         FROM blacklists
+         WHERE (cardinality($1::text[]) > 0 AND LOWER(ign) = ANY($1::text[]))
+            OR (COALESCE($2::text, '') <> '' AND discord_user_id = $2)
+         UNION ALL
+         SELECT
+           'admin_blacklists' AS source_table,
+           id,
+           ign,
+           NULL::text AS discord_user_id,
+           reason,
+           NULL::text AS time_length,
+           NULL::timestamp AS blacklist_expires,
+           created_at,
+           is_pardoned
+         FROM admin_blacklists
+         WHERE cardinality($1::text[]) > 0 AND LOWER(ign) = ANY($1::text[])
+       ) q
+       WHERE source_table <> 'admin_blacklists' OR COALESCE(is_pardoned, false) = false
+       ORDER BY id DESC
+       LIMIT 20`,
+      [ignAliases, discordUserId]
     );
     if (r.rows.length === 0) {
-      return interaction.editReply({ content: `No blacklist rows for **${ign}**.` });
+      return interaction.editReply({
+        content: `No blacklist rows for **${ignInput || 'that target'}**${discordUserId ? ` (<@${discordUserId}>)` : ''}.`,
+      });
     }
     const now = Date.now();
     const desc = r.rows
@@ -113,49 +152,15 @@ module.exports = function blacklistCommands(ctx) {
             ? ` — expires ${expiresAt.toLocaleString()}`
             : ` — expired ${expiresAt.toLocaleString()}`;
         }
-        return `**#${row.id}** — ${row.reason} (${row.time_length || '?'}) — **${status}**${timingText}`;
+        const source = row.source_table === 'admin_blacklists' ? 'Premium' : 'Standard';
+        return `**#${row.id}** [${source}] — ${row.reason} (${row.time_length || '?'}) — **${status}**${timingText}`;
       })
       .join('\n');
     const embed = new EmbedBuilder()
-      .setTitle(`Blacklist history: ${ign}`)
+      .setTitle(`Blacklist history: ${ignInput || ign}`)
       .setColor(0xe74c3c)
       .setDescription(desc.slice(0, 3900))
       .setTimestamp();
-    await interaction.editReply({ embeds: [embed] });
-  }
-
-  async function handleAdminblacklist(interaction) {
-    await defer(interaction, false);
-    if (!requireLevel(interaction.member, 4)) {
-      return interaction.editReply({ content: '❌ Admins or higher only.' });
-    }
-    const ignOpt = interaction.options.getString('ign');
-    const identity = ignOpt ? await resolveIgnIdentity(pool, ignOpt) : null;
-    const ignAliases =
-      identity?.aliases?.length > 0
-        ? identity.aliases
-        : ignOpt
-          ? [normalizeIgn(ignOpt)]
-          : [];
-    const q = ignOpt
-      ? await pool.query(
-          'SELECT * FROM admin_blacklists WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 25',
-          [ignAliases]
-        )
-      : await pool.query('SELECT * FROM admin_blacklists ORDER BY id DESC LIMIT 25');
-    if (q.rows.length === 0) {
-      return interaction.editReply({ content: 'No admin blacklist rows.' });
-    }
-    const desc = q.rows
-      .map(
-        (row) =>
-          `**#${row.id}** \`${row.ign}\` — ${row.reason || '?'} | pardoned: ${row.is_pardoned}`
-      )
-      .join('\n');
-    const embed = new EmbedBuilder()
-      .setTitle('Admin blacklist')
-      .setColor(0xc0392b)
-      .setDescription(desc.slice(0, 3900));
     await interaction.editReply({ embeds: [embed] });
   }
 
@@ -195,8 +200,8 @@ module.exports = function blacklistCommands(ctx) {
           .setRequired(false)
       ),
     new SlashCommandBuilder()
-      .setName('pardon')
-      .setDescription('Pardon a specific blacklist entry')
+      .setName('removeblacklist')
+      .setDescription('Remove a specific premium blacklist entry')
       .addStringOption((o) =>
         o
           .setName('table')
@@ -210,14 +215,13 @@ module.exports = function blacklistCommands(ctx) {
       .addIntegerOption((o) => o.setName('id').setDescription('Row id').setRequired(true))
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
-      .setName('viewblacklist')
-      .setDescription('View blacklist history for a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
-    new SlashCommandBuilder()
-      .setName('adminblacklist')
-      .setDescription('View admin blacklist records with IDs')
+      .setName('viewblacklists')
+      .setDescription('View premium blacklist history for a player')
       .addStringOption((o) =>
-        o.setName('ign').setDescription('Filter by IGN (optional)').setRequired(false)
+        o.setName('ign').setDescription('Minecraft IGN (optional if discord is provided)').setRequired(false)
+      )
+      .addUserOption((o) =>
+        o.setName('discord').setDescription('Discord user (optional if ign is provided)').setRequired(false)
       ),
   ];
 
@@ -225,9 +229,8 @@ module.exports = function blacklistCommands(ctx) {
     commands,
     handlers: {
       blacklist: handleBlacklist,
-      pardon: handlePardon,
-      viewblacklist: handleViewblacklist,
-      adminblacklist: handleAdminblacklist,
+      removeblacklist: handlePardon,
+      viewblacklists: handleViewblacklist,
     },
   };
 };

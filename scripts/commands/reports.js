@@ -1,38 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = function reportsCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn, resolveIgnIdentity } = ctx;
-
-  async function handleBancheck(interaction) {
-    await defer(interaction, false);
-    if (!requireLevel(interaction.member, 3)) {
-      return interaction.editReply({ content: '❌ Managers or higher only.' });
-    }
-    const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
-    const ign = identity.canonicalIgn || identity.ign;
-    const ignAliases = identity.aliases.length ? identity.aliases : [ign];
-    const r = await pool.query(
-      'SELECT * FROM reports WHERE LOWER(ign) = ANY($1::text[]) ORDER BY id DESC LIMIT 25',
-      [ignAliases]
-    );
-    if (r.rows.length === 0) {
-      return interaction.editReply({ content: `No reports for **${ign}**.` });
-    }
-    const desc = r.rows
-      .map(
-        (row) =>
-          `**#${row.id}** — ${row.reason?.slice(0, 120)} — punishment: ${row.punishment_issued}${row.evidence_link ? ` — [evidence](${row.evidence_link})` : ''}`
-      )
-      .join('\n');
-    await interaction.editReply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(`Reports: ${ign}`)
-          .setColor(0xf1c40f)
-          .setDescription(desc.slice(0, 3900)),
-      ],
-    });
-  }
+  const { pool, requireLevel, defer, resolveIgnIdentity } = ctx;
 
   async function handleAcceptreport(interaction) {
     await defer(interaction, true);
@@ -68,10 +37,6 @@ module.exports = function reportsCommands(ctx) {
 
   const commands = [
     new SlashCommandBuilder()
-      .setName('bancheck')
-      .setDescription('View reports for a player')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
-    new SlashCommandBuilder()
       .setName('acceptreport')
       .setDescription('Log an accepted player report')
       .addStringOption((o) => o.setName('ign').setDescription('Reported player IGN').setRequired(true))
@@ -87,7 +52,6 @@ module.exports = function reportsCommands(ctx) {
   return {
     commands,
     handlers: {
-      bancheck: handleBancheck,
       acceptreport: handleAcceptreport,
     },
   };

@@ -93,8 +93,8 @@ module.exports = function fightsCommands(ctx) {
 
   async function handleDeletescore(interaction) {
     await defer(interaction, false);
-    if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
-      return interaction.editReply({ content: '❌ Admin or owner only.' });
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const id = interaction.options.getInteger('id');
     const q = await pool.query(
@@ -151,14 +151,13 @@ module.exports = function fightsCommands(ctx) {
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
       .setName('deletescore')
-      .setDescription('Permanently delete a fight from the database (Admin/Owner only)')
+      .setDescription('Permanently delete a fight from the database (Manager+ only)')
       .addIntegerOption((o) =>
         o
           .setName('id')
           .setDescription('Fight ID from /score (scores.id)')
           .setRequired(true)
-      )
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      ),
     new SlashCommandBuilder()
       .setName('voidscore')
       .setDescription('Void/invalidate a fight by fight ID')

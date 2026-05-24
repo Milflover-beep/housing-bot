@@ -1058,13 +1058,10 @@ module.exports = function coreCommands(ctx) {
     };
 
     const everyone = [
-      '`/uuid` — look up player UUID',
       '`/fighthistory` — fight history',
       '`/profile` — public player snapshot',
       '`/viewcooldown` — check your own cooldown',
-      '`/whois` — quick IGN lookup',
-      '`/proxies` — view proxy list',
-      '`/checkcommands` — this list',
+      '`/commands` — this list',
       '`/pmlist` — PM list',
     ];
     add('Everyone', everyone);
@@ -1087,20 +1084,15 @@ module.exports = function coreCommands(ctx) {
         '`/score`',
         '`/log` (→ manager queue)',
         '`/history`',
-        '`/staffstats`',
-        '`/hypixel`',
         '`/revokeargument`',
-        '`/gradientrequests`',
-        '`/viewblacklist`',
+        '`/viewblacklists`',
         '`/activepunishments`',
       ]);
     }
     if (lv >= 3) {
       add('Manager+', [
         '`/submit`',
-        '`/primerate`',
         '`/eliterate`',
-        '`/apexrate`',
         '`/removetier`',
         '`/tierids`',
         '`/viewwatchlist`',
@@ -1108,13 +1100,17 @@ module.exports = function coreCommands(ctx) {
         '`/getproof`',
         '`/totalhistory`',
         '`/removepunishment`',
+        '`/staffstats`',
         '`/blacklist`',
-        '`/bancheck`',
+        '`/removeblacklist`',
         '`/viewalts`',
+        '`/altwhitelist`',
         '`/acceptreport`',
         '`/clearcooldown`',
         '`/addpm`',
+        '`/deletepm`',
         '`/editpm`',
+        '`/deletescore`',
         '`/addalt`',
         '`/editalt`',
         '`/deletealt`',
@@ -1125,20 +1121,12 @@ module.exports = function coreCommands(ctx) {
     }
     if (lv >= 4) {
       add('Admin+', [
-        '`/addproxy`',
         '`/adminlog`',
         '`/watchlist`',
-        '`/deletepm`',
-        '`/edituuid`',
-        '`/removeuuid`',
-        '`/adminblacklist`',
-        '`/pardon`',
         '`/update` (IGN rename)',
-        '`/whitelist`',
         '`/roleblacklist`',
         '`/viewroleblacklist`',
         '`/updatescore`',
-        '`/deletescore`',
       ]);
     }
     if (ctx.isOwner(interaction.user.id)) {
@@ -1291,7 +1279,7 @@ module.exports = function coreCommands(ctx) {
       .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
 
     new SlashCommandBuilder()
-      .setName('checkcommands')
+      .setName('commands')
       .setDescription('View available commands based on your role'),
 
     new SlashCommandBuilder().setName('help').setDescription('Request help from staff'),
@@ -1304,7 +1292,7 @@ module.exports = function coreCommands(ctx) {
       score: handleScore,
       fighthistory: handleFightHistory,
       submit: handleSubmit,
-      checkcommands: handleCheckcommands,
+      commands: handleCheckcommands,
       help: handleHelp,
     },
     buttonHandlers: [handleFightHistoryButton],

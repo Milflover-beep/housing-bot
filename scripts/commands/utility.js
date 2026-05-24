@@ -1,32 +1,4 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
-
-const WHOIS_FILE_PATH = path.join(__dirname, '..', 'data', 'whois.txt');
-
-function loadWhoisOverrides() {
-  try {
-    const raw = fs.readFileSync(WHOIS_FILE_PATH, 'utf8');
-    const map = new Map();
-    const lines = raw.split(/\r?\n/);
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-      const sep = trimmed.indexOf('|');
-      if (sep <= 0) continue;
-      const ign = trimmed.slice(0, sep).trim().toLowerCase();
-      const text = trimmed.slice(sep + 1).trim();
-      if (!ign || !text) continue;
-      map.set(ign, text);
-    }
-    return map;
-  } catch (err) {
-    console.warn(
-      `⚠️ Failed to load whois overrides from ${WHOIS_FILE_PATH}: ${err?.message || err}`
-    );
-    return new Map();
-  }
-}
 
 module.exports = function utilityCommands(ctx) {
   const { pool, requireLevel, isOwner, defer, normalizeIgn } = ctx;
@@ -183,18 +155,6 @@ module.exports = function utilityCommands(ctx) {
     });
   }
 
-  async function handleWhois(interaction) {
-    await defer(interaction, false);
-    const raw = interaction.options.getString('ign', true).trim();
-    if (!raw) {
-      return interaction.editReply({ content: 'Give an IGN to whois.' });
-    }
-    const key = raw.toLowerCase();
-    const overrides = loadWhoisOverrides();
-    const text = overrides.get(key) || `${raw} is mid`;
-    await interaction.editReply({ content: text });
-  }
-
   async function handleRemoveflag(interaction) {
     await defer(interaction, true);
     if (!isOwner(interaction.user.id)) {
@@ -212,12 +172,6 @@ module.exports = function utilityCommands(ctx) {
   }
 
   const commands = [
-    new SlashCommandBuilder()
-      .setName('whois')
-      .setDescription('PvP facts about an IGN')
-      .addStringOption((o) =>
-        o.setName('ign').setDescription('Minecraft IGN').setRequired(true)
-      ),
     new SlashCommandBuilder()
       .setName('update')
       .setDescription('Update IGN across all database tables')
@@ -272,7 +226,6 @@ module.exports = function utilityCommands(ctx) {
   return {
     commands,
     handlers: {
-      whois: handleWhois,
       update: handleUpdate,
       find: handleFind,
       errorcheck: handleErrorcheck,

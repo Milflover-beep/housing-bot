@@ -168,7 +168,7 @@ module.exports = function altsCommands(ctx) {
         o.setName('new-alt-ign').setDescription('New alt (optional)').setRequired(false)
       ),
     new SlashCommandBuilder()
-      .setName('whitelist')
+      .setName('altwhitelist')
       .setDescription('Set whitelist status for an IGN to control visibility in viewalts')
       .addStringOption((o) => o.setName('ign').setDescription('Original IGN').setRequired(true))
       .addBooleanOption((o) =>
@@ -184,7 +184,7 @@ module.exports = function altsCommands(ctx) {
       deletealt: handleDeletealt,
       clearalt: handleClearalt,
       editalt: handleEditalt,
-      whitelist: handleWhitelist,
+      altwhitelist: handleWhitelist,
     },
   };
 };
