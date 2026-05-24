@@ -1061,13 +1061,20 @@ module.exports = function coreCommands(ctx) {
       '`/uuid` — look up player UUID',
       '`/fighthistory` — fight history',
       '`/profile` — public player snapshot',
+      '`/viewcooldown` — check your own cooldown',
+      '`/whois` — quick IGN lookup',
+      '`/proxies` — view proxy list',
       '`/checkcommands` — this list',
       '`/pmlist` — PM list',
     ];
     add('Everyone', everyone);
 
     if (lv >= 1 || ctx.hasBoosterOrAbove(interaction.member)) {
-      add('Booster+', ['`/tierlist` — tier list', '`/viewtier` — view a player tier']);
+      add('Booster+', [
+        '`/tierlist` — tier list',
+        '`/viewtier` — view a player tier',
+        '`/help` — ping punishment staff',
+      ]);
     }
     if (lv >= 1) {
       add('PM+', ['`/pmstats`', '`/check`']);
@@ -1075,11 +1082,15 @@ module.exports = function coreCommands(ctx) {
     if (lv >= 2) {
       add('Staff+', [
         '`/deny`',
+        '`/abort`',
         '`/accept`',
         '`/score`',
         '`/log` (→ manager queue)',
         '`/history`',
         '`/staffstats`',
+        '`/hypixel`',
+        '`/revokeargument`',
+        '`/gradientrequests`',
         '`/viewblacklist`',
         '`/activepunishments`',
       ]);
@@ -1121,11 +1132,13 @@ module.exports = function coreCommands(ctx) {
         '`/edituuid`',
         '`/removeuuid`',
         '`/adminblacklist`',
+        '`/pardon`',
         '`/update` (IGN rename)',
         '`/whitelist`',
         '`/roleblacklist`',
         '`/viewroleblacklist`',
         '`/updatescore`',
+        '`/deletescore`',
       ]);
     }
     if (ctx.isOwner(interaction.user.id)) {
@@ -1133,7 +1146,6 @@ module.exports = function coreCommands(ctx) {
         '`/find`',
         '`/errorcheck`',
         '`/removeflag`',
-        '`/gradientrequests` (basic)',
       ]);
     }
 

@@ -232,6 +232,41 @@ module.exports = function applicationsCommands(ctx) {
     });
   }
 
+  async function handleViewcooldown(interaction) {
+    await defer(interaction, true);
+    let row = null;
+    try {
+      const r = await pool.query(
+        `SELECT ign, rank_type, cooldown_until
+         FROM application_denials
+         WHERE discord_id = $1
+           AND cooldown_until > NOW()
+         ORDER BY cooldown_until DESC
+         LIMIT 1`,
+        [interaction.user.id]
+      );
+      row = r.rows[0] || null;
+    } catch (e) {
+      if (e && e.code !== '42P01') throw e;
+    }
+
+    if (!row) {
+      return interaction.editReply({
+        content: '✅ You currently have **no active application cooldown**.',
+      });
+    }
+    const ts = Math.floor(new Date(row.cooldown_until).getTime() / 1000);
+    const rankMap = { P: 'Prime', E: 'Elite', A: 'Apex' };
+    const rankLabel = rankMap[String(row.rank_type || '').toUpperCase()] || 'Unknown';
+    return interaction.editReply({
+      content:
+        `⏳ You are currently on cooldown.\n` +
+        `IGN: **${row.ign || 'unknown'}**\n` +
+        `Rank type: **${rankLabel}**\n` +
+        `Ends: <t:${ts}:F> (<t:${ts}:R>)`,
+    });
+  }
+
   async function handleDeny(interaction) {
     await defer(interaction, false);
     const staff = await resolveGuildMember(interaction);
@@ -422,6 +457,9 @@ module.exports = function applicationsCommands(ctx) {
   return {
     commands: [
       new SlashCommandBuilder()
+        .setName('viewcooldown')
+        .setDescription('Check your own current application cooldown'),
+      new SlashCommandBuilder()
         .setName('clearcooldown')
         .setDescription('Remove application tryout cooldown (undo a mistaken /deny)')
         .addUserOption((o) =>
@@ -495,6 +533,7 @@ module.exports = function applicationsCommands(ctx) {
         ),
     ],
     handlers: {
+      viewcooldown: handleViewcooldown,
       clearcooldown: handleClearcooldown,
       deny: handleDeny,
       abort: handleAbort,
