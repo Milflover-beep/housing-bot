@@ -951,7 +951,8 @@ module.exports = function punishmentCommands(ctx) {
         r = await pool.query(
           `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
            FROM punishment_logs
-           WHERE status = 'active' AND punishment_status = 'active'
+           WHERE LOWER(COALESCE(TRIM(punishment_status), '')) = 'active'
+             AND LOWER(COALESCE(TRIM(status), '')) IN ('active', 'approved', 'accepted')
              AND (
                COALESCE(TRIM(cooldown_raw), '') = '-1'
                OR reversal_remind_at IS NULL
@@ -975,7 +976,8 @@ module.exports = function punishmentCommands(ctx) {
                NULL::timestamptz AS reversal_remind_at,
                created_at
              FROM punishment_logs
-             WHERE status = 'active' AND punishment_status = 'active'
+             WHERE LOWER(COALESCE(TRIM(punishment_status), '')) = 'active'
+               AND LOWER(COALESCE(TRIM(status), '')) IN ('active', 'approved', 'accepted')
              ORDER BY created_at DESC
              LIMIT 200`
           );
