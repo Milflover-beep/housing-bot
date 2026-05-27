@@ -2,7 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 
 module.exports = function fightsCommands(ctx) {
-  const { pool, isAdminOrOwner, defer, resolveIgnIdentity } = ctx;
+  const { pool, isAdminOrOwner, requireLevel, defer, resolveIgnIdentity } = ctx;
 
   async function sendFightActionLog(client, action, row, actorUsername) {
     const title = action === 'voided' ? 'Fight Voided' : 'Fight Deleted';
