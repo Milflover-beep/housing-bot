@@ -2,7 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 const { buildFightScoreLogEmbed, sendFightScoreLogEmbed } = require('../lib/fightScoreLogEmbed');
 
 module.exports = function fightsCommands(ctx) {
-  const { pool, isAdminOrOwner, requireLevel, defer, normalizeIgn, resolveIgnIdentity } = ctx;
+  const { pool, isAdminOrOwner, defer, resolveIgnIdentity } = ctx;
 
   async function sendFightActionLog(client, action, row, actorUsername) {
     const title = action === 'voided' ? 'Fight Voided' : 'Fight Deleted';
@@ -21,7 +21,7 @@ module.exports = function fightsCommands(ctx) {
     await sendFightScoreLogEmbed(client, embed);
   }
 
-  async function handleUpdatescore(interaction) {
+  async function handleEditscore(interaction) {
     await defer(interaction, false);
     if (!isAdminOrOwner(interaction.member, interaction.user.id)) {
       return interaction.editReply({ content: '❌ Admin or owner only.' });
@@ -32,6 +32,7 @@ module.exports = function fightsCommands(ctx) {
     const score = interaction.options.getString('final-score');
     const fightType = interaction.options.getString('fight-type');
     const voided = interaction.options.getBoolean('voided');
+    const dateInput = interaction.options.getString('date');
     const sets = [];
     const vals = [];
     let n = 1;
@@ -57,6 +58,16 @@ module.exports = function fightsCommands(ctx) {
       sets.push(`is_voided = $${n++}`);
       vals.push(voided);
     }
+    if (dateInput) {
+      const parsed = new Date(dateInput);
+      if (Number.isNaN(parsed.getTime())) {
+        return interaction.editReply({
+          content: '❌ Invalid date. Use ISO format like `2026-05-27` or `2026-05-27T14:30:00Z`.',
+        });
+      }
+      sets.push(`created_at = $${n++}`);
+      vals.push(parsed.toISOString());
+    }
     if (!sets.length) {
       return interaction.editReply({ content: '❌ Provide at least one field to update.' });
     }
@@ -72,23 +83,6 @@ module.exports = function fightsCommands(ctx) {
     });
     await interaction.editReply({ content: `✅ Updated score **#${id}**.` });
     await sendFightScoreLogEmbed(interaction.client, logEmbed);
-  }
-
-  async function handleVoidscore(interaction) {
-    await defer(interaction, false);
-    if (!requireLevel(interaction.member, 3)) {
-      return interaction.editReply({ content: '❌ Managers or higher only.' });
-    }
-    const id = interaction.options.getInteger('id');
-    const q = await pool.query(
-      'UPDATE scores SET is_voided = true WHERE id = $1 RETURNING *',
-      [id]
-    );
-    if (!q.rows.length) {
-      return interaction.editReply({ content: '❌ No score with that id.' });
-    }
-    await interaction.editReply({ content: `✅ Voided score **#${id}**.` });
-    await sendFightActionLog(interaction.client, 'voided', q.rows[0], interaction.user.username);
   }
 
   async function handleDeletescore(interaction) {
@@ -113,7 +107,7 @@ module.exports = function fightsCommands(ctx) {
 
   const commands = [
     new SlashCommandBuilder()
-      .setName('updatescore')
+      .setName('editscore')
       .setDescription('Fix a miscored fight (Admin/Owner only)')
       .addIntegerOption((o) =>
         o
@@ -148,19 +142,16 @@ module.exports = function fightsCommands(ctx) {
           .setDescription('Set voided status (default false if provided)')
           .setRequired(false)
       )
+      .addStringOption((o) =>
+        o
+          .setName('date')
+          .setDescription('Set fight date (ISO, e.g. 2026-05-27 or 2026-05-27T14:30:00Z)')
+          .setRequired(false)
+      )
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
       .setName('deletescore')
       .setDescription('Permanently delete a fight from the database (Manager+ only)')
-      .addIntegerOption((o) =>
-        o
-          .setName('id')
-          .setDescription('Fight ID from /score (scores.id)')
-          .setRequired(true)
-      ),
-    new SlashCommandBuilder()
-      .setName('voidscore')
-      .setDescription('Void/invalidate a fight by fight ID')
       .addIntegerOption((o) =>
         o
           .setName('id')
@@ -172,9 +163,8 @@ module.exports = function fightsCommands(ctx) {
   return {
     commands,
     handlers: {
-      updatescore: handleUpdatescore,
+      editscore: handleEditscore,
       deletescore: handleDeletescore,
-      voidscore: handleVoidscore,
     },
   };
 };

@@ -681,13 +681,22 @@ module.exports = function coreCommands(ctx) {
     }
 
     if (watchlistRows?.rows?.length > 0) {
-      const wl = watchlistRows.rows[0];
-      let content =
-        `🚨 **WATCHLIST MATCH for \`${ign}\`** — Please ping a manager.\n` +
-        `Threat: **${wl.threat_level || 'unknown'}**\n` +
-        `Reason: ${wl.reason || '—'}\n` +
-        `Entry ID: #${wl.id}`;
-      if (content.length > 2000) content = `${content.slice(0, 1997)}…`;
+      const header = `🚨 **WATCHLIST MATCH for \`${ign}\`** — Please ping a manager.\n`;
+      const lines = watchlistRows.rows.map((wl) => {
+        const date = wl.created_at ? new Date(wl.created_at).toLocaleDateString() : 'unknown date';
+        const threat = wl.threat_level || 'unknown';
+        const reason = String(wl.reason || '—').replace(/\s+/g, ' ').trim();
+        return `• #${wl.id} — Threat: **${threat}** — ${reason} (${date})`;
+      });
+      let content = header;
+      for (const line of lines) {
+        const next = `${content}${line}\n`;
+        if (next.length > 1990) {
+          content = `${content}…and more watchlist notes.`;
+          break;
+        }
+        content = next;
+      }
       await interaction
         .followUp({ content, flags: MessageFlags.Ephemeral })
         .catch((e) => console.warn('check: watchlist followUp failed:', e.message));
@@ -908,7 +917,7 @@ module.exports = function coreCommands(ctx) {
       .setFooter({
         text:
           `Page ${safePage} of ${totalPages} · ${perPage} per page · Use ◀ ▶ or the optional \`page\` parameter` +
-          (showIds ? ' · IDs for /updatescore' : '') +
+          (showIds ? ' · IDs for /editscore' : '') +
           debugFooterNote,
       })
       .setTimestamp();
@@ -1113,7 +1122,6 @@ module.exports = function coreCommands(ctx) {
         '`/editalt`',
         '`/deletealt`',
         '`/clearalt`',
-        '`/voidscore`',
         '`/publictierlistupdate`',
       ]);
     }
@@ -1124,7 +1132,7 @@ module.exports = function coreCommands(ctx) {
         '`/update` (IGN rename)',
         '`/roleblacklist`',
         '`/viewroleblacklist`',
-        '`/updatescore`',
+        '`/editscore`',
       ]);
     }
     if (ctx.isOwner(interaction.user.id)) {
@@ -1248,7 +1256,7 @@ module.exports = function coreCommands(ctx) {
       .addBooleanOption((o) =>
         o
           .setName('debug')
-          .setDescription('Staff only: show database fight ID per row (for /updatescore)')
+          .setDescription('Staff only: show database fight ID per row (for /editscore)')
           .setRequired(false)
       ),
 
