@@ -95,8 +95,78 @@ module.exports = function blacklistCommands(ctx) {
     const ignInput = interaction.options.getString('ign');
     const discordUser = interaction.options.getUser('discord');
     if (!ignInput && !discordUser) {
-      return interaction.editReply({ content: '❌ Provide **ign** or **discord**.' });
+      const allActive = await pool.query(
+        `SELECT * FROM (
+           SELECT
+             'blacklists' AS source_table,
+             id,
+             ign,
+             discord_user_id,
+             reason,
+             time_length,
+             blacklist_expires,
+             created_at
+           FROM blacklists
+           WHERE blacklist_expires IS NULL OR blacklist_expires > NOW()
+           UNION ALL
+           SELECT
+             'admin_blacklists' AS source_table,
+             id,
+             ign,
+             NULL::text AS discord_user_id,
+             reason,
+             COALESCE(time_length, 'permanent') AS time_length,
+             blacklist_expires,
+             created_at
+           FROM admin_blacklists
+           WHERE COALESCE(is_pardoned, false) = false
+             AND (blacklist_expires IS NULL OR blacklist_expires > NOW())
+         ) q
+         ORDER BY created_at DESC, id DESC
+         LIMIT 250`
+      );
+
+      if (allActive.rows.length === 0) {
+        return interaction.editReply({ content: 'No active blacklists right now.' });
+      }
+
+      const lines = allActive.rows.map((row) => {
+        const source = row.source_table === 'admin_blacklists' ? 'Premium' : 'Standard';
+        const target = row.ign ? `\`${row.ign}\`` : row.discord_user_id ? `<@${row.discord_user_id}>` : '`unknown`';
+        const remaining = row.blacklist_expires
+          ? `<t:${Math.floor(new Date(row.blacklist_expires).getTime() / 1000)}:R>`
+          : 'permanent';
+        return `**#${row.id}** [${source}] — ${target} — ${row.reason || '?'} — remaining: ${remaining}`;
+      });
+
+      const PAGE_BODY_MAX = 1800;
+      const pages = [];
+      let current = '';
+      for (const line of lines) {
+        const next = current ? `${current}\n${line}` : line;
+        if (next.length > PAGE_BODY_MAX && current) {
+          pages.push(current);
+          current = line;
+        } else if (next.length > PAGE_BODY_MAX) {
+          pages.push(line.slice(0, PAGE_BODY_MAX));
+          current = '';
+        } else {
+          current = next;
+        }
+      }
+      if (current) pages.push(current);
+      if (!pages.length) pages.push('_No rows._');
+
+      const formatPage = (body, idx, total) => `**Active blacklists** (page ${idx + 1}/${total})\n${body}`;
+      await interaction.editReply({ content: formatPage(pages[0], 0, pages.length).slice(0, 2000) });
+      for (let i = 1; i < pages.length; i += 1) {
+        await interaction.followUp({
+          content: formatPage(pages[i], i, pages.length).slice(0, 2000),
+        });
+      }
+      return;
     }
+
     const identity = ignInput ? await resolveIgnIdentity(pool, ignInput) : null;
     const ign = identity ? identity.canonicalIgn || identity.ign : 'unknown';
     const ignAliases = identity?.aliases?.length ? identity.aliases : [];
@@ -216,7 +286,7 @@ module.exports = function blacklistCommands(ctx) {
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
       .setName('viewblacklists')
-      .setDescription('View premium blacklist history for a player')
+      .setDescription('View blacklist history, or all active blacklists when no filters are provided')
       .addStringOption((o) =>
         o.setName('ign').setDescription('Minecraft IGN (optional if discord is provided)').setRequired(false)
       )
