@@ -366,8 +366,7 @@ module.exports = function coreCommands(ctx) {
     const runner = await resolveGuildMember(interaction);
     if (!runner || !requireLevel(runner, 1)) {
       return interaction.editReply({
-        content:
-          '❌ PM or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+        content: "❌ You don't have permission to run this command!",
       });
     }
     const ignInput = interaction.options.getString('ign');
@@ -1092,7 +1091,6 @@ module.exports = function coreCommands(ctx) {
     if (lv >= 3) {
       add('Manager+', [
         '`/submit`',
-        '`/eliterate`',
         '`/removetier`',
         '`/tierids`',
         '`/viewwatchlist`',

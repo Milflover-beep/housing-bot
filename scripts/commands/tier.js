@@ -243,14 +243,6 @@ module.exports = function tierCommands(ctx) {
 
   const commands = [
     new SlashCommandBuilder()
-      .setName('eliterate')
-      .setDescription('Submit an Elite tier rating')
-      .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('tier').setDescription('Tier').setRequired(true)
-      )
-      .addUserOption((o) => o.setName('discord').setDescription('Discord user').setRequired(true)),
-    new SlashCommandBuilder()
       .setName('viewtier')
       .setDescription('View the tier result for a specific player (PM rank and higher)')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
@@ -284,7 +276,6 @@ module.exports = function tierCommands(ctx) {
   return {
     commands,
     handlers: {
-      eliterate: (i) => submitRating(i, 'E'),
       viewtier: handleViewtier,
       removetier: handleRemovetier,
       tierids: handleTierids,
