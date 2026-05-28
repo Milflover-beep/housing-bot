@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function utilityCommands(ctx) {
-  const { pool, requireLevel, isOwner, defer, normalizeIgn } = ctx;
+  const { pool, requireLevel, defer, normalizeIgn } = ctx;
 
   const FIND_TARGETS = [
     {
@@ -131,46 +131,6 @@ module.exports = function utilityCommands(ctx) {
     });
   }
 
-  async function handleErrorcheck(interaction) {
-    await defer(interaction, true);
-    if (!isOwner(interaction.user.id)) {
-      return interaction.editReply({ content: '❌ Bot owner only.' });
-    }
-    const flagged = await pool.query('SELECT database_name, entry_id FROM flagged_errors');
-    const issues = [];
-    const ignTables = [
-      ['blacklists', 'SELECT id FROM blacklists WHERE ign IS NULL OR TRIM(ign) = \'\''],
-    ];
-    for (const [t, sql] of ignTables) {
-      const r = await pool.query(sql);
-      for (const row of r.rows) {
-        const skip = flagged.rows.some(
-          (f) => f.database_name === t && f.entry_id === row.id
-        );
-        if (!skip) issues.push(`${t}#${row.id}: empty IGN`);
-      }
-    }
-    await interaction.editReply({
-      content: issues.length ? issues.join('\n').slice(0, 3900) : '✅ No obvious issues found.',
-    });
-  }
-
-  async function handleRemoveflag(interaction) {
-    await defer(interaction, true);
-    if (!isOwner(interaction.user.id)) {
-      return interaction.editReply({ content: '❌ Bot owner only.' });
-    }
-    const databaseName = interaction.options.getString('database');
-    const entryId = interaction.options.getInteger('entry-id');
-    await pool.query(
-      `INSERT INTO flagged_errors (database_name, entry_id, created_at) VALUES ($1, $2, NOW())`,
-      [databaseName, entryId]
-    );
-    await interaction.editReply({
-      content: `✅ Flagged **${databaseName}** entry **${entryId}** to ignore in /errorcheck.`,
-    });
-  }
-
   const commands = [
     new SlashCommandBuilder()
       .setName('update')
@@ -209,18 +169,6 @@ module.exports = function utilityCommands(ctx) {
             { name: 'uuid_registry', value: 'uuid_registry' }
           )
       ),
-    new SlashCommandBuilder()
-      .setName('errorcheck')
-      .setDescription('Check all databases for potential errors and typos (Bot Owner Only)'),
-    new SlashCommandBuilder()
-      .setName('removeflag')
-      .setDescription('Flag a database entry to be ignored by /errorcheck (Bot Owner Only)')
-      .addStringOption((o) =>
-        o.setName('database').setDescription('Table name').setRequired(true)
-      )
-      .addIntegerOption((o) =>
-        o.setName('entry-id').setDescription('Primary key id').setRequired(true)
-      ),
   ];
 
   return {
@@ -228,8 +176,6 @@ module.exports = function utilityCommands(ctx) {
     handlers: {
       update: handleUpdate,
       find: handleFind,
-      errorcheck: handleErrorcheck,
-      removeflag: handleRemoveflag,
     },
   };
 };

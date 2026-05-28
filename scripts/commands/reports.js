@@ -76,6 +76,30 @@ module.exports = function reportsCommands(ctx) {
     await interaction.editReply({ content: content.slice(0, 3900) });
   }
 
+  async function handleRemovereport(interaction) {
+    await defer(interaction, true);
+    if (!requireLevel(interaction.member, 3)) {
+      return interaction.editReply({ content: '❌ Managers or higher only.' });
+    }
+    const id = interaction.options.getInteger('id', true);
+    const q = await pool.query(
+      `DELETE FROM reports
+       WHERE id = $1
+       RETURNING id, ign, reason, punishment_issued`,
+      [id]
+    );
+    if (!q.rows.length) {
+      return interaction.editReply({ content: `❌ No report found with ID **${id}**.` });
+    }
+    const row = q.rows[0];
+    await interaction.editReply({
+      content:
+        `✅ Removed report **#${row.id}** for **${row.ign || 'unknown'}**.\n` +
+        `Reason: ${row.reason || '—'}\n` +
+        `Punishment issued: **${row.punishment_issued ? 'Yes' : 'No'}**`,
+    });
+  }
+
   const commands = [
     new SlashCommandBuilder()
       .setName('acceptreport')
@@ -92,6 +116,16 @@ module.exports = function reportsCommands(ctx) {
       .setName('reportcheck')
       .setDescription('View report history for a player (last 30 days and older)')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
+    new SlashCommandBuilder()
+      .setName('removereport')
+      .setDescription('Remove a report by report ID (Manager+ only)')
+      .addIntegerOption((o) =>
+        o
+          .setName('id')
+          .setDescription('Report ID')
+          .setRequired(true)
+          .setMinValue(1)
+      ),
   ];
 
   return {
@@ -99,6 +133,7 @@ module.exports = function reportsCommands(ctx) {
     handlers: {
       acceptreport: handleAcceptreport,
       reportcheck: handleReportcheck,
+      removereport: handleRemovereport,
     },
   };
 };

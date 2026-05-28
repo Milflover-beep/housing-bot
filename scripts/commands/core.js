@@ -1114,6 +1114,7 @@ module.exports = function coreCommands(ctx) {
         '`/altwhitelist`',
         '`/acceptreport`',
         '`/reportcheck`',
+        '`/removereport`',
         '`/clearcooldown`',
         '`/addpm`',
         '`/deletepm`',
@@ -1131,17 +1132,12 @@ module.exports = function coreCommands(ctx) {
         '`/adminlog`',
         '`/watchlist`',
         '`/update` (IGN rename)',
-        '`/roleblacklist`',
         '`/viewroleblacklist`',
         '`/editscore`',
       ]);
     }
     if (ctx.isOwner(interaction.user.id)) {
-      add('Bot owner', [
-        '`/find`',
-        '`/errorcheck`',
-        '`/removeflag`',
-      ]);
+      add('Bot owner', ['`/find`']);
     }
 
     const embed = new EmbedBuilder()
