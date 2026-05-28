@@ -800,21 +800,48 @@ module.exports = function punishmentCommands(ctx) {
     const ign = identity.canonicalIgn || identity.ign;
     const ignAliases = identity.aliases.length ? identity.aliases : [ign];
     const r = await pool.query(
-      `SELECT * FROM punishment_logs WHERE LOWER(user_ign) = ANY($1::text[]) ORDER BY created_at DESC`,
+      `SELECT *
+       FROM punishment_logs
+       WHERE LOWER(user_ign) = ANY($1::text[])
+         AND LOWER(COALESCE(TRIM(punishment), 'ban')) = 'ban'
+       ORDER BY created_at DESC
+       LIMIT 30`,
       [ignAliases]
     );
     if (r.rows.length === 0) {
-      return interaction.editReply({ content: `No punishments for **${ign}**.` });
+      return interaction.editReply({ content: `No ban logs found for **${ign}**.` });
     }
-    const chunks = r.rows.map(
-      (row) =>
-        `**#${row.id}** (${punishmentTypeLabel(row.punishment)})\nDate: ${
-          row.created_at ? new Date(row.created_at).toLocaleString() : '—'
-        }\nDetails: ${row.punishment_details || '—'}\nEvidence: ${row.evidence || '—'}\nStatus: ${
-          row.status
-        } / ${row.punishment_status}\n`
-    );
-    await interaction.editReply({ content: chunks.join('\n').slice(0, 3900) });
+    const now = Date.now();
+    const activeBan = r.rows.find((row) => {
+      const statusOk = ['active', 'approved', 'accepted'].includes(
+        String(row.status || '')
+          .trim()
+          .toLowerCase()
+      );
+      const punishmentStatusOk = String(row.punishment_status || '')
+        .trim()
+        .toLowerCase() === 'active';
+      if (!statusOk || !punishmentStatusOk) return false;
+      if (String(row.cooldown_raw || '').trim() === '-1') return true;
+      if (!row.reversal_remind_at) return true;
+      return new Date(row.reversal_remind_at).getTime() > now;
+    });
+    const head = activeBan
+      ? `🚫 **Currently banned:** YES (log **#${activeBan.id}**)\nReason: ${activeBan.punishment_details || '—'}\nEvidence: ${activeBan.evidence || '—'}`
+      : '✅ **Currently banned:** NO';
+    const recent = r.rows
+      .slice(0, 12)
+      .map(
+        (row) =>
+          `**#${row.id}** — ${row.created_at ? new Date(row.created_at).toLocaleString() : '—'}\n` +
+          `Reason: ${row.punishment_details || '—'}\n` +
+          `Evidence: ${row.evidence || '—'}\n` +
+          `Status: ${row.status || '—'} / ${row.punishment_status || '—'}`
+      )
+      .join('\n\n');
+    await interaction.editReply({
+      content: `**Ban check: ${ign}**\n${head}\n\n**Recent ban logs**\n${recent}`.slice(0, 3900),
+    });
   }
 
   async function handleTotalhistory(interaction) {
@@ -1117,8 +1144,8 @@ module.exports = function punishmentCommands(ctx) {
       .setDescription('View punishment and blacklist history for a player')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
-      .setName('getproof')
-      .setDescription('View evidence and details for punishments of a player (Manager+)')
+      .setName('bancheck')
+      .setDescription('Check whether a player is currently banned and view proof/details')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
     new SlashCommandBuilder()
       .setName('totalhistory')
@@ -1148,7 +1175,7 @@ module.exports = function punishmentCommands(ctx) {
       adminlog: handleAdminlog,
       staffstats: handleStaffstats,
       history: handleHistory,
-      getproof: handleGetproof,
+      bancheck: handleGetproof,
       totalhistory: handleTotalhistory,
       activepunishments: handleActivepunishments,
       checkqueue: handleCheckqueue,
