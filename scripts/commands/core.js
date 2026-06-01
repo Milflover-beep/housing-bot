@@ -1104,7 +1104,7 @@ module.exports = function coreCommands(ctx) {
         '`/tierids`',
         '`/viewwatchlist`',
         '`/checkqueue`',
-        '`/bancheck`',
+        '`/punishmentcheck`',
         '`/totalhistory`',
         '`/removepunishment`',
         '`/staffstats`',
