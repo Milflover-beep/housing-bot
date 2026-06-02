@@ -811,22 +811,34 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({ content: `No punishment logs found for **${ign}**.` });
     }
     const now = Date.now();
-    const activePunishment = r.rows.find((row) => {
-      const statusOk = ['active', 'approved', 'accepted'].includes(
-        String(row.status || '')
-          .trim()
-          .toLowerCase()
-      );
-      const punishmentStatusOk = String(row.punishment_status || '')
+    const currentPunishment = r.rows.find((row) => {
+      const status = String(row.status || '')
         .trim()
-        .toLowerCase() === 'active';
-      if (!statusOk || !punishmentStatusOk) return false;
+        .toLowerCase();
+      const punishmentStatus = String(row.punishment_status || '')
+        .trim()
+        .toLowerCase();
+
+      // Queue state counts as currently punished (pending review).
+      if (punishmentStatus === 'pending_review' || status === 'queued' || status === 'pending') {
+        return true;
+      }
+
+      // Denied/voided rows are not currently punished.
+      if (punishmentStatus === 'denied' || status === 'denied' || status === 'void') {
+        return false;
+      }
+
+      // Accepted/active punishment still counts until expiry.
+      const acceptedStatus = ['active', 'approved', 'accepted'].includes(status);
+      const activeState = punishmentStatus === 'active';
+      if (!acceptedStatus || !activeState) return false;
       if (String(row.cooldown_raw || '').trim() === '-1') return true;
       if (!row.reversal_remind_at) return true;
       return new Date(row.reversal_remind_at).getTime() > now;
     });
-    const head = activePunishment
-      ? `🚫 **Currently punished:** YES (${punishmentTypeLabel(activePunishment.punishment)} #${activePunishment.id})\nReason: ${activePunishment.punishment_details || '—'}\nEvidence: ${activePunishment.evidence || '—'}`
+    const head = currentPunishment
+      ? `🚫 **Currently punished:** YES (${punishmentTypeLabel(currentPunishment.punishment)} #${currentPunishment.id})\nReason: ${currentPunishment.punishment_details || '—'}\nEvidence: ${currentPunishment.evidence || '—'}`
       : '✅ **Currently punished:** NO';
     const recent = r.rows
       .slice(0, 12)

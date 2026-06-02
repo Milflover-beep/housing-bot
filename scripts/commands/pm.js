@@ -4,6 +4,8 @@ module.exports = function pmCommands(ctx) {
   const {
     pool,
     requireLevel,
+    parseRoleIdList,
+    hasRoleId,
     defer,
     normalizeIgn,
     resolveIgnIdentity,
@@ -22,6 +24,12 @@ module.exports = function pmCommands(ctx) {
   function parseManagerType(optionValue) {
     if (optionValue === null || optionValue === undefined || optionValue === 'NA') return null;
     return optionValue;
+  }
+
+  function isHeadPm(member) {
+    const headPmRoleIds = parseRoleIdList('BOT_ROLE_HEAD_PM_ID');
+    if (!headPmRoleIds.length) return false;
+    return headPmRoleIds.some((id) => hasRoleId(member, id));
   }
 
   function formatPmRow(r) {
@@ -298,10 +306,10 @@ module.exports = function pmCommands(ctx) {
   async function handleAddpm(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 3)) {
+    if (!requireLevel(member, 3) && !isHeadPm(member)) {
       return interaction.editReply({
         content:
-          '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+          '❌ Managers or Head PM only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
     const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
@@ -349,10 +357,10 @@ module.exports = function pmCommands(ctx) {
   async function handleDeletepm(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 3)) {
+    if (!requireLevel(member, 3) && !isHeadPm(member)) {
       return interaction.editReply({
         content:
-          '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot and restart it.',
+          '❌ Managers or Head PM only. If you have the role, enable **Server Members Intent** for the bot and restart it.',
       });
     }
     const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
@@ -396,10 +404,10 @@ module.exports = function pmCommands(ctx) {
   async function handleEditpm(interaction) {
     await defer(interaction, false);
     const member = await resolveGuildMember(interaction);
-    if (!requireLevel(member, 3)) {
+    if (!requireLevel(member, 3) && !isHeadPm(member)) {
       return interaction.editReply({
         content:
-          '❌ Managers or higher only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
+          '❌ Managers or Head PM only. If you have the role, enable **Server Members Intent** for the bot (Developer Portal) and restart it, then try again.',
       });
     }
     const oldIdentity = await resolveIgnIdentity(pool, interaction.options.getString('old-ign'));
@@ -515,9 +523,9 @@ module.exports = function pmCommands(ctx) {
     const debug = interaction.options.getBoolean('debug') === true;
     await defer(interaction, debug);
     const member = await resolveGuildMember(interaction);
-    if (debug && !requireLevel(member, 2)) {
+    if (debug && !requireLevel(member, 2) && !isHeadPm(member)) {
       return interaction.editReply({
-        content: '❌ **Debug** mode is Staff+ only.',
+        content: '❌ **Debug** mode is Staff+ or Head PM only.',
       });
     }
     if (!debug && !requireLevel(member, 1)) {
