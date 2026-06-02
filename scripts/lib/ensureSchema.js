@@ -46,6 +46,7 @@ async function ensureDatabaseSchema(pool) {
       CREATE TABLE IF NOT EXISTS punishment_logs (
         id                 SERIAL PRIMARY KEY,
         user_ign           TEXT,
+        user_uuid          TEXT,
         staff_ign          TEXT,
         evidence           TEXT,
         punishment_details TEXT,
@@ -60,6 +61,9 @@ async function ensureDatabaseSchema(pool) {
     `);
     await client.query(`
       ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS cooldown_raw TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS user_uuid TEXT;
     `);
     await client.query(`
       ALTER TABLE punishment_logs ADD COLUMN IF NOT EXISTS reversal_remind_at TIMESTAMPTZ;

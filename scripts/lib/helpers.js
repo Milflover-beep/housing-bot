@@ -65,6 +65,28 @@ async function fetchMojangProfileByIgn(ignLower) {
   return { uuid, name };
 }
 
+async function fetchMojangNameByUuid(uuidInput) {
+  const uuid = normalizeUuidCompact(uuidInput);
+  if (!uuid) return null;
+  const url = `https://sessionserver.mojang.com/session/minecraft/profile/${encodeURIComponent(uuid)}`;
+  let res;
+  try {
+    res = await fetch(url, { headers: { Accept: 'application/json' } });
+  } catch {
+    return null;
+  }
+  if (!res?.ok) return null;
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return null;
+  }
+  const name = normalizeIgn(data?.name);
+  if (!name) return null;
+  return name;
+}
+
 /**
  * Resolve an IGN for command handlers.
  * UUID alias expansion is intentionally disabled: commands should match the exact IGN only.
@@ -241,6 +263,8 @@ module.exports = {
   TIER_ORDER,
   normalizeIgn,
   normalizeUuidCompact,
+  fetchMojangProfileByIgn,
+  fetchMojangNameByUuid,
   resolveIgnIdentity,
   normalizeTierLabelForDb,
   normalizeLadderTypeForDb,

@@ -23,6 +23,9 @@ module.exports = function punishmentCommands(ctx) {
     getMemberLevel,
     hasRoleId,
     parseRoleIdList,
+    normalizeUuidCompact,
+    fetchMojangProfileByIgn,
+    fetchMojangNameByUuid,
   } = ctx;
 
   const HEAD_ADMIN_ROLE_IDS = parseRoleIdList('BOT_ROLE_HEAD_ADMIN_ID');
@@ -49,7 +52,41 @@ module.exports = function punishmentCommands(ctx) {
     return String(kind || '').trim().toLowerCase() === 'mute' ? 'Mute' : 'Ban';
   }
 
-  function buildExpiryActionEmbed(logRow) {
+  const mojangNameCache = new Map();
+
+  async function resolveCurrentIgnFromUuid(uuidInput, fallbackIgn) {
+    const uuid = normalizeUuidCompact(uuidInput);
+    if (!uuid) return String(fallbackIgn || '—');
+    const cached = mojangNameCache.get(uuid);
+    if (cached && cached.expiresAt > Date.now()) return cached.name;
+    const name = await fetchMojangNameByUuid(uuid);
+    if (!name) return String(fallbackIgn || '—');
+    mojangNameCache.set(uuid, { name, expiresAt: Date.now() + 10 * 60 * 1000 });
+    return name;
+  }
+
+  async function resolveLookupUuidForIgn(ign, ignAliases = []) {
+    const fromMojang = await fetchMojangProfileByIgn(ign).catch(() => null);
+    const mojangUuid = normalizeUuidCompact(fromMojang?.uuid || null);
+    if (mojangUuid) return mojangUuid;
+    try {
+      const fallback = await pool.query(
+        `SELECT user_uuid
+         FROM punishment_logs
+         WHERE LOWER(TRIM(user_ign)) = ANY($1::text[])
+           AND COALESCE(TRIM(user_uuid), '') <> ''
+         ORDER BY created_at DESC NULLS LAST, id DESC
+         LIMIT 1`,
+        [ignAliases?.length ? ignAliases : [ign]]
+      );
+      return normalizeUuidCompact(fallback.rows[0]?.user_uuid || null);
+    } catch (e) {
+      if (e?.code === '42703') return null;
+      throw e;
+    }
+  }
+
+  function buildExpiryActionEmbed(logRow, displayIgn) {
     const issued = logRow.date || logRow.created_at;
     const exp = logRow.reversal_remind_at;
     const action = punishmentActionLabel(logRow.punishment);
@@ -57,7 +94,7 @@ module.exports = function punishmentCommands(ctx) {
       .setTitle(`⏰ ${action.toUpperCase()} reminder`)
       .setColor(0xe74c3c)
       .addFields(
-        { name: '👤 Player IGN', value: String(logRow.user_ign || '—'), inline: true },
+        { name: '👤 Player IGN', value: String(displayIgn || logRow.user_ign || '—'), inline: true },
         { name: '👮 Staff Member', value: String(logRow.staff_ign || '—'), inline: true },
         { name: '📅 Date Issued', value: issued ? new Date(issued).toLocaleDateString() : '—', inline: true },
         { name: '⏰ Punishment ended', value: exp ? new Date(exp).toLocaleString() : '—', inline: true },
@@ -75,23 +112,28 @@ module.exports = function punishmentCommands(ctx) {
     if (!ch?.isTextBased?.()) return;
     const roleId =
       process.env.PUNISHMENT_STAFF_ROLE_ID || process.env.STAFF_PING_ROLE_ID || DEFAULT_STAFF_PING_ROLE_ID;
+    const displayIgn = await resolveCurrentIgnFromUuid(logRow.user_uuid, logRow.user_ign);
     await ch.send({
       content: `<@&${roleId}>`,
-      embeds: [buildExpiryActionEmbed(logRow)],
+      embeds: [buildExpiryActionEmbed(logRow, displayIgn)],
     });
   }
 
-  async function nextProgressiveCooldownRaw(userIgn, punishmentType = 'ban') {
+  async function nextProgressiveCooldownRaw(userIgn, punishmentType = 'ban', userUuid = null) {
     const normalizedType = String(punishmentType || 'ban').trim().toLowerCase() === 'mute' ? 'mute' : 'ban';
+    const normalizedUuid = normalizeUuidCompact(userUuid);
     const r = await pool.query(
       `SELECT COUNT(*)::int AS c
        FROM punishment_logs
-       WHERE LOWER(TRIM(user_ign)) = LOWER(TRIM($1::text))
+       WHERE (
+         (COALESCE($3::text, '') <> '' AND LOWER(TRIM(COALESCE(user_uuid, ''))) = $3)
+         OR LOWER(TRIM(user_ign)) = LOWER(TRIM($1::text))
+       )
          AND LOWER(COALESCE(TRIM(punishment), 'ban')) = $2
          AND COALESCE(progressive_ban, true) = true
          AND status = 'active'
          AND punishment_status = 'active'`,
-      [userIgn, normalizedType]
+      [userIgn, normalizedType, normalizedUuid || null]
     );
     const acceptedCount = r.rows[0]?.c || 0;
     const multiplier = normalizedType === 'ban' ? 4 : 2;
@@ -469,6 +511,8 @@ module.exports = function punishmentCommands(ctx) {
     }
     const userIdentity = await resolveIgnIdentity(pool, interaction.options.getString('user-ign'));
     const userIgn = userIdentity.canonicalIgn || userIdentity.ign;
+    const mojangProfile = await fetchMojangProfileByIgn(userIgn).catch(() => null);
+    const userUuid = normalizeUuidCompact(mojangProfile?.uuid || null);
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence', true) || '';
     const evidenceTrim = evidence.trim();
@@ -476,7 +520,7 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({ content: '❌ **Evidence** is required.' });
     }
     const punishmentType = interaction.options.getString('punishment-type') || 'ban';
-    const cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType);
+    const cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
     const cooldownMs = parseCooldownToMs(cooldownRaw);
     const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
     const staffIgn = interaction.user.username;
@@ -486,11 +530,12 @@ module.exports = function punishmentCommands(ctx) {
 
     try {
       const ins = await pool.query(
-        `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
-         VALUES ($1, $2, $3, $4, NOW(), $5, $6, NOW(), 'queued', 'pending_review', $7, $8, false, true)
+        `INSERT INTO punishment_logs (user_ign, user_uuid, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
+         VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, NOW(), 'queued', 'pending_review', $8, $9, false, true)
          RETURNING id`,
         [
           userIgn,
+          userUuid || null,
           staffIgn,
           evidenceTrim,
           details,
@@ -563,6 +608,8 @@ module.exports = function punishmentCommands(ctx) {
     }
     const userIdentity = await resolveIgnIdentity(pool, interaction.options.getString('user-ign'));
     const userIgn = userIdentity.canonicalIgn || userIdentity.ign;
+    const mojangProfile = await fetchMojangProfileByIgn(userIgn).catch(() => null);
+    const userUuid = normalizeUuidCompact(mojangProfile?.uuid || null);
     const details = interaction.options.getString('details');
     const evidence = interaction.options.getString('evidence') || '';
     const evidenceTrim = evidence.trim();
@@ -572,7 +619,7 @@ module.exports = function punishmentCommands(ctx) {
       banDurationOpt && String(banDurationOpt).trim() ? String(banDurationOpt).trim() : '';
     let progressiveBan = false;
     if (!cooldownRaw) {
-      cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType);
+      cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
       progressiveBan = true;
     }
     const isPermanentBan = cooldownRaw === '-1';
@@ -590,10 +637,20 @@ module.exports = function punishmentCommands(ctx) {
     const submitterIsHeadAdmin = isHeadAdmin(member);
 
     const ins = await pool.query(
-      `INSERT INTO punishment_logs (user_ign, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6, NOW(), 'queued', 'pending_review', $7, $8, false, false)
+      `INSERT INTO punishment_logs (user_ign, user_uuid, staff_ign, evidence, punishment_details, date, discord_user, punishment, created_at, status, punishment_status, cooldown_raw, reversal_remind_at, reversal_reminded, progressive_ban)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, NOW(), 'queued', 'pending_review', $8, $9, false, false)
        RETURNING id`,
-      [userIgn, staffIgn, evidenceTrim || null, details, staffDiscordId, punishmentType, cooldownRaw, reversalAt]
+      [
+        userIgn,
+        userUuid || null,
+        staffIgn,
+        evidenceTrim || null,
+        details,
+        staffDiscordId,
+        punishmentType,
+        cooldownRaw,
+        reversalAt,
+      ]
     );
     const logId = ins.rows[0].id;
     const summary = (details || '').slice(0, 200);
@@ -739,12 +796,31 @@ module.exports = function punishmentCommands(ctx) {
     const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
     const ign = identity.canonicalIgn || identity.ign;
     const ignAliases = identity.aliases.length ? identity.aliases : [ign];
+    const lookupUuid = await resolveLookupUuidForIgn(ign, ignAliases);
     const [pun, bl] = await Promise.all([
-      pool.query(
-        `SELECT id, punishment, punishment_details, status, punishment_status, cooldown_raw, reversal_remind_at, created_at
-         FROM punishment_logs WHERE LOWER(user_ign) = ANY($1::text[]) ORDER BY created_at DESC LIMIT 25`,
-        [ignAliases]
-      ),
+      (async () => {
+        try {
+          return await pool.query(
+            `SELECT id, punishment, punishment_details, status, punishment_status, cooldown_raw, reversal_remind_at, created_at
+             FROM punishment_logs
+             WHERE (COALESCE($2::text, '') <> '' AND LOWER(TRIM(COALESCE(user_uuid, ''))) = $2)
+                OR LOWER(user_ign) = ANY($1::text[])
+             ORDER BY created_at DESC
+             LIMIT 25`,
+            [ignAliases, lookupUuid || '']
+          );
+        } catch (e) {
+          if (e?.code !== '42703') throw e;
+          return pool.query(
+            `SELECT id, punishment, punishment_details, status, punishment_status, cooldown_raw, reversal_remind_at, created_at
+             FROM punishment_logs
+             WHERE LOWER(user_ign) = ANY($1::text[])
+             ORDER BY created_at DESC
+             LIMIT 25`,
+            [ignAliases]
+          );
+        }
+      })(),
       pool.query(
         `SELECT id, reason, time_length, blacklist_expires, created_at
          FROM blacklists WHERE LOWER(ign) = ANY($1::text[]) ORDER BY created_at DESC LIMIT 25`,
@@ -799,14 +875,29 @@ module.exports = function punishmentCommands(ctx) {
     const identity = await resolveIgnIdentity(pool, interaction.options.getString('ign'));
     const ign = identity.canonicalIgn || identity.ign;
     const ignAliases = identity.aliases.length ? identity.aliases : [ign];
-    const r = await pool.query(
-      `SELECT *
-       FROM punishment_logs
-       WHERE LOWER(user_ign) = ANY($1::text[])
-       ORDER BY created_at DESC
-       LIMIT 30`,
-      [ignAliases]
-    );
+    const lookupUuid = await resolveLookupUuidForIgn(ign, ignAliases);
+    let r;
+    try {
+      r = await pool.query(
+        `SELECT *
+         FROM punishment_logs
+         WHERE (COALESCE($2::text, '') <> '' AND LOWER(TRIM(COALESCE(user_uuid, ''))) = $2)
+            OR LOWER(user_ign) = ANY($1::text[])
+         ORDER BY created_at DESC
+         LIMIT 30`,
+        [ignAliases, lookupUuid || '']
+      );
+    } catch (e) {
+      if (e?.code !== '42703') throw e;
+      r = await pool.query(
+        `SELECT *
+         FROM punishment_logs
+         WHERE LOWER(user_ign) = ANY($1::text[])
+         ORDER BY created_at DESC
+         LIMIT 30`,
+        [ignAliases]
+      );
+    }
     if (r.rows.length === 0) {
       return interaction.editReply({ content: `No punishment logs found for **${ign}**.` });
     }
@@ -987,7 +1078,7 @@ module.exports = function punishmentCommands(ctx) {
       let r;
       try {
         r = await pool.query(
-          `SELECT id, user_ign, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
+          `SELECT id, user_ign, user_uuid, punishment, punishment_details, cooldown_raw, reversal_remind_at, created_at
            FROM punishment_logs
            WHERE LOWER(COALESCE(TRIM(punishment_status), '')) = 'active'
              AND LOWER(COALESCE(TRIM(status), '')) IN ('active', 'approved', 'accepted')
@@ -1008,6 +1099,7 @@ module.exports = function punishmentCommands(ctx) {
             `SELECT
                id,
                user_ign,
+               NULL::text AS user_uuid,
                NULL::text AS punishment,
                punishment_details,
                NULL::text AS cooldown_raw,
@@ -1027,6 +1119,7 @@ module.exports = function punishmentCommands(ctx) {
             `SELECT
                id,
                user_ign,
+               NULL::text AS user_uuid,
                NULL::text AS punishment,
                punishment_details,
                NULL::text AS cooldown_raw,
@@ -1041,20 +1134,21 @@ module.exports = function punishmentCommands(ctx) {
       if (r.rows.length === 0) {
         return interaction.editReply({ content: 'No active punishments right now.' });
       }
-      const lines = r.rows.map((row) => {
-        let remaining = 'unknown';
-        if (String(row.cooldown_raw || '').trim() === '-1') {
-          remaining = 'permanent';
-        } else if (row.reversal_remind_at) {
-          const endAt = new Date(row.reversal_remind_at);
-          remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
-        }
-        return `**#${row.id}** — **${row.user_ign || 'unknown'}** — ${(
-          punishmentTypeLabel(row.punishment)
-        )} — ${(
-          row.punishment_details || 'no details'
-        ).slice(0, 60)} — remaining: ${remaining}`;
-      });
+      const lines = await Promise.all(
+        r.rows.map(async (row) => {
+          let remaining = 'unknown';
+          if (String(row.cooldown_raw || '').trim() === '-1') {
+            remaining = 'permanent';
+          } else if (row.reversal_remind_at) {
+            const endAt = new Date(row.reversal_remind_at);
+            remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
+          }
+          const displayIgn = await resolveCurrentIgnFromUuid(row.user_uuid, row.user_ign || 'unknown');
+          return `**#${row.id}** — **${displayIgn}** — ${punishmentTypeLabel(row.punishment)} — ${(
+            row.punishment_details || 'no details'
+          ).slice(0, 60)} — remaining: ${remaining}`;
+        })
+      );
       const PAGE_BODY_MAX = 1800;
       const pages = [];
       let current = '';

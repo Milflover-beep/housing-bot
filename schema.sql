@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS proxies (
 CREATE TABLE IF NOT EXISTS punishment_logs (
   id                 SERIAL PRIMARY KEY,
   user_ign           TEXT,
+  user_uuid          TEXT,
   staff_ign          TEXT,
   evidence           TEXT,
   punishment_details TEXT,

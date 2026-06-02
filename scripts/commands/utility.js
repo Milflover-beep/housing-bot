@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = function utilityCommands(ctx) {
-  const { pool, requireLevel, defer, normalizeIgn } = ctx;
+  const { pool, requireLevel, defer, normalizeIgn, normalizeUuidCompact } = ctx;
 
   const FIND_TARGETS = [
     {
@@ -54,36 +54,77 @@ module.exports = function utilityCommands(ctx) {
     if (!requireLevel(interaction.member, 4)) {
       return interaction.editReply({ content: '❌ Admins or higher only.' });
     }
-    const oldIgn = normalizeIgn(interaction.options.getString('old-ign'));
-    const newIgn = normalizeIgn(interaction.options.getString('new-ign'));
+    const oldIgnRaw = interaction.options.getString('old-ign');
+    const newIgnRaw = interaction.options.getString('new-ign');
+    const oldUuidRaw = interaction.options.getString('old-uuid');
+    const newUuidRaw = interaction.options.getString('new-uuid');
+
+    const oldIgn = oldIgnRaw ? normalizeIgn(oldIgnRaw) : '';
+    const newIgn = newIgnRaw ? normalizeIgn(newIgnRaw) : '';
+    const oldUuid = oldUuidRaw ? normalizeUuidCompact(oldUuidRaw) : '';
+    const newUuid = newUuidRaw ? normalizeUuidCompact(newUuidRaw) : '';
+
+    const hasIgnPair = Boolean(oldIgn && newIgn);
+    const hasUuidPair = Boolean(oldUuid && newUuid);
+    if ((!hasIgnPair && !hasUuidPair) || (hasIgnPair && hasUuidPair)) {
+      return interaction.editReply({
+        content:
+          '❌ Provide exactly one update pair: either **old-ign + new-ign** or **old-uuid + new-uuid**.',
+      });
+    }
+    if ((oldUuidRaw || newUuidRaw) && (!/^[0-9a-f]{32}$/i.test(oldUuid) || !/^[0-9a-f]{32}$/i.test(newUuid))) {
+      return interaction.editReply({
+        content:
+          '❌ UUIDs must be valid (32 hex chars, with or without dashes). Example: `f84c6a790a4e45bca4f2f3ca7f6f0f0d`.',
+      });
+    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       const run = (sql, params) => client.query(sql, params);
-      await run('UPDATE admin_blacklists SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run(
-        'UPDATE alts SET original_ign = $2 WHERE LOWER(original_ign) = $1',
-        [oldIgn, newIgn]
-      );
-      await run('UPDATE alts SET alt_ign = $2 WHERE LOWER(alt_ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE apr_logs SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE blacklists SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE pm_list SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE pm_membership_periods SET ign = $2 WHERE LOWER(TRIM(ign)) = $1', [
-        oldIgn,
-        newIgn,
-      ]);
-      await run('UPDATE punishment_logs SET user_ign = $2 WHERE LOWER(user_ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE reports SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE role_blacklists SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE scores SET winner_ign = $2 WHERE LOWER(winner_ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE scores SET loser_ign = $2 WHERE LOWER(loser_ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE tier_history SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE tier_results SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE timeouts SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE uuid_registry SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE watchlist SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
-      await run('UPDATE application_denials SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+      if (hasIgnPair) {
+        await run('UPDATE admin_blacklists SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run(
+          'UPDATE alts SET original_ign = $2 WHERE LOWER(original_ign) = $1',
+          [oldIgn, newIgn]
+        );
+        await run('UPDATE alts SET alt_ign = $2 WHERE LOWER(alt_ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE apr_logs SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE blacklists SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE pm_list SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE pm_membership_periods SET ign = $2 WHERE LOWER(TRIM(ign)) = $1', [
+          oldIgn,
+          newIgn,
+        ]);
+        await run('UPDATE punishment_logs SET user_ign = $2 WHERE LOWER(user_ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE reports SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE role_blacklists SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE scores SET winner_ign = $2 WHERE LOWER(winner_ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE scores SET loser_ign = $2 WHERE LOWER(loser_ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE tier_history SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE tier_results SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE timeouts SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE uuid_registry SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE watchlist SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+        await run('UPDATE application_denials SET ign = $2 WHERE LOWER(ign) = $1', [oldIgn, newIgn]);
+      } else {
+        await run(
+          "UPDATE pm_list SET uuid = $2 WHERE LOWER(REPLACE(COALESCE(uuid, ''), '-', '')) = $1",
+          [oldUuid, newUuid]
+        );
+        await run(
+          "UPDATE uuid_registry SET uuid = $2 WHERE LOWER(REPLACE(COALESCE(uuid, ''), '-', '')) = $1",
+          [oldUuid, newUuid]
+        );
+        await run(
+          "UPDATE watchlist SET uuid = $2 WHERE LOWER(REPLACE(COALESCE(uuid, ''), '-', '')) = $1",
+          [oldUuid, newUuid]
+        );
+        await run(
+          "UPDATE punishment_logs SET user_uuid = $2 WHERE LOWER(REPLACE(COALESCE(user_uuid, ''), '-', '')) = $1",
+          [oldUuid, newUuid]
+        );
+      }
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -93,7 +134,9 @@ module.exports = function utilityCommands(ctx) {
       client.release();
     }
     await interaction.editReply({
-      content: `✅ Renamed **${oldIgn}** → **${newIgn}** across supported tables.`,
+      content: hasIgnPair
+        ? `✅ Renamed **${oldIgn}** → **${newIgn}** across supported tables.`
+        : `✅ Updated UUID **${oldUuid}** → **${newUuid}** across UUID-backed tables.`,
     });
   }
 
@@ -134,9 +177,19 @@ module.exports = function utilityCommands(ctx) {
   const commands = [
     new SlashCommandBuilder()
       .setName('update')
-      .setDescription('Update IGN across all database tables')
-      .addStringOption((o) => o.setName('old-ign').setDescription('Current IGN').setRequired(true))
-      .addStringOption((o) => o.setName('new-ign').setDescription('New IGN').setRequired(true)),
+      .setDescription('Update IGN or UUID across database tables (Admin+)')
+      .addStringOption((o) =>
+        o.setName('old-ign').setDescription('Current IGN (use with new-ign)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o.setName('new-ign').setDescription('New IGN (use with old-ign)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o.setName('old-uuid').setDescription('Current UUID (use with new-uuid)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o.setName('new-uuid').setDescription('New UUID (use with old-uuid)').setRequired(false)
+      ),
     new SlashCommandBuilder()
       .setName('find')
       .setDescription('Find rows by ID or text across moderation/player tables (Admin+)')

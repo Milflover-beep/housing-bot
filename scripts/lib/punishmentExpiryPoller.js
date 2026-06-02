@@ -1,4 +1,5 @@
 const { EmbedBuilder } = require('discord.js');
+const { normalizeUuidCompact, fetchMojangNameByUuid } = require('./helpers');
 
 /** Default @Staff role for unban pings; override with PUNISHMENT_STAFF_ROLE_ID. */
 const DEFAULT_STAFF_PING_ROLE_ID = '1299685590119223327';
@@ -13,7 +14,21 @@ function getPunishmentPingsChannelId() {
   ).trim();
 }
 
-function buildExpiryEmbed(row) {
+const mojangNameCache = new Map();
+
+async function resolveDisplayIgnForRow(row) {
+  const fallback = String(row.user_ign || '—');
+  const uuid = normalizeUuidCompact(row.user_uuid);
+  if (!uuid) return fallback;
+  const cached = mojangNameCache.get(uuid);
+  if (cached && cached.expiresAt > Date.now()) return cached.name;
+  const name = await fetchMojangNameByUuid(uuid);
+  if (!name) return fallback;
+  mojangNameCache.set(uuid, { name, expiresAt: Date.now() + 10 * 60 * 1000 });
+  return name;
+}
+
+function buildExpiryEmbed(row, displayIgn) {
   const issued = row.date || row.created_at;
   const exp = row.reversal_remind_at;
   const action = String(row.punishment || '').trim().toLowerCase() === 'mute' ? 'unmute' : 'unban';
@@ -21,7 +36,7 @@ function buildExpiryEmbed(row) {
     .setTitle(`⏰ ${action.toUpperCase()} reminder`)
     .setColor(0xe74c3c)
     .addFields(
-      { name: '👤 Player IGN', value: String(row.user_ign || '—'), inline: true },
+      { name: '👤 Player IGN', value: String(displayIgn || row.user_ign || '—'), inline: true },
       { name: '👮 Staff Member', value: String(row.staff_ign || '—'), inline: true },
       {
         name: '📅 Date Issued',
@@ -87,7 +102,8 @@ function startPunishmentExpiryPoller(client, pool) {
       process.env.PUNISHMENT_STAFF_ROLE_ID || process.env.STAFF_PING_ROLE_ID || DEFAULT_STAFF_PING_ROLE_ID;
 
     for (const row of rows) {
-      const embed = buildExpiryEmbed(row);
+      const displayIgn = await resolveDisplayIgnForRow(row);
+      const embed = buildExpiryEmbed(row, displayIgn);
       const content = `<@&${roleId}>`;
       try {
         await ch.send({
