@@ -929,16 +929,53 @@ module.exports = function punishmentCommands(ctx) {
       return new Date(row.reversal_remind_at).getTime() > now;
     });
     const head = currentPunishment
-      ? `🚫 **Currently punished:** YES (${punishmentTypeLabel(currentPunishment.punishment)} #${currentPunishment.id})\nReason: ${currentPunishment.punishment_details || '—'}\nEvidence: ${currentPunishment.evidence || '—'}`
+      ? (() => {
+          let expiresText = 'unknown';
+          if (String(currentPunishment.cooldown_raw || '').trim() === '-1') {
+            expiresText = 'permanent';
+          } else if (currentPunishment.reversal_remind_at) {
+            const endAt = new Date(currentPunishment.reversal_remind_at);
+            expiresText = `${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - now)} remaining)`;
+          } else if (
+            String(currentPunishment.punishment_status || '')
+              .trim()
+              .toLowerCase() === 'pending_review'
+          ) {
+            expiresText = 'pending review';
+          }
+          return (
+            `🚫 **Currently punished:** YES (${punishmentTypeLabel(currentPunishment.punishment)} #${currentPunishment.id})\n` +
+            `Reason: ${currentPunishment.punishment_details || '—'}\n` +
+            `Evidence: ${currentPunishment.evidence || '—'}\n` +
+            `Expires: ${expiresText}`
+          );
+        })()
       : '✅ **Currently punished:** NO';
     const recent = r.rows
       .slice(0, 12)
       .map(
-        (row) =>
-          `**#${row.id}** (${punishmentTypeLabel(row.punishment)}) — ${row.created_at ? new Date(row.created_at).toLocaleString() : '—'}\n` +
-          `Reason: ${row.punishment_details || '—'}\n` +
-          `Evidence: ${row.evidence || '—'}\n` +
-          `Status: ${row.status || '—'} / ${row.punishment_status || '—'}`
+        (row) => {
+          let expiresText = 'unknown';
+          if (String(row.cooldown_raw || '').trim() === '-1') {
+            expiresText = 'permanent';
+          } else if (row.reversal_remind_at) {
+            const endAt = new Date(row.reversal_remind_at);
+            expiresText = `${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - now)} remaining)`;
+          } else if (
+            String(row.punishment_status || '')
+              .trim()
+              .toLowerCase() === 'pending_review'
+          ) {
+            expiresText = 'pending review';
+          }
+          return (
+            `**#${row.id}** (${punishmentTypeLabel(row.punishment)}) — ${row.created_at ? new Date(row.created_at).toLocaleString() : '—'}\n` +
+            `Reason: ${row.punishment_details || '—'}\n` +
+            `Evidence: ${row.evidence || '—'}\n` +
+            `Status: ${row.status || '—'} / ${row.punishment_status || '—'}\n` +
+            `Expires: ${expiresText}`
+          );
+        }
       )
       .join('\n\n');
     await interaction.editReply({
