@@ -1111,6 +1111,7 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 2)) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
+    const includePermanent = interaction.options.getBoolean('permanent') === true;
     try {
       let r;
       try {
@@ -1171,8 +1172,17 @@ module.exports = function punishmentCommands(ctx) {
       if (r.rows.length === 0) {
         return interaction.editReply({ content: 'No active punishments right now.' });
       }
+      const filteredRows = includePermanent
+        ? r.rows
+        : r.rows.filter((row) => String(row.cooldown_raw || '').trim() !== '-1');
+      if (filteredRows.length === 0) {
+        return interaction.editReply({
+          content:
+            'No active non-permanent punishments right now.\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent bans.**',
+        });
+      }
       const lines = await Promise.all(
-        r.rows.map(async (row) => {
+        filteredRows.map(async (row) => {
           let remaining = 'unknown';
           if (String(row.cooldown_raw || '').trim() === '-1') {
             remaining = 'permanent';
@@ -1204,8 +1214,13 @@ module.exports = function punishmentCommands(ctx) {
       if (current) pages.push(current);
       if (!pages.length) pages.push('_No rows._');
 
-      const formatPage = (body, idx, total) =>
-        `**Active punishments** (page ${idx + 1}/${total})\n${body}`.slice(0, 2000);
+      const filterNote = includePermanent
+        ? ''
+        : '\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent bans.**';
+      const formatPage = (body, idx, total) => {
+        const note = !includePermanent && idx === total - 1 ? filterNote : '';
+        return `**Active punishments** (page ${idx + 1}/${total})\n${body}${note}`.slice(0, 2000);
+      };
 
       await interaction.editReply({
         content: formatPage(pages[0], 0, pages.length),
@@ -1294,7 +1309,13 @@ module.exports = function punishmentCommands(ctx) {
       .setDescription('List ban logs with ID, IGN, date, and reason (Manager+ only)'),
     new SlashCommandBuilder()
       .setName('activepunishments')
-      .setDescription('List active punishments with IDs'),
+      .setDescription('List active punishments with IDs')
+      .addBooleanOption((o) =>
+        o
+          .setName('permanent')
+          .setDescription('Include permanent punishments too (default: false)')
+          .setRequired(false)
+      ),
     new SlashCommandBuilder()
       .setName('checkqueue')
       .setDescription('Review punishment queue from /log — paged proof, Accept / Deny (Manager+)'),
