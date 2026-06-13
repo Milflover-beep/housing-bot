@@ -1,0 +1,1169 @@
+{
+  "created_at": "2026-06-08T14:41:29.626Z",
+  "punishment_logs": [],
+  "blacklists": [
+    {
+      "id": 26,
+      "ign": "fresh_creeper",
+      "time_length": "2 weeks",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-08-18T13:53:48.324Z",
+      "created_at": "2025-08-04T13:53:50.654Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 27,
+      "ign": "rgtg",
+      "time_length": "2 weeks",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-08-18T13:55:13.847Z",
+      "created_at": "2025-08-04T13:55:14.027Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 28,
+      "ign": "pactel",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2025-08-19T04:31:45.768Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 29,
+      "ign": "veltrohkissedme",
+      "time_length": "Permanent",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": null,
+      "created_at": "2025-09-12T17:51:16.233Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 34,
+      "ign": "carrboy",
+      "time_length": "2 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-11-16T00:57:06.616Z",
+      "created_at": "2025-09-16T00:57:06.646Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 50,
+      "ign": "daltso",
+      "time_length": "2 weeks",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-10-02T20:24:17.100Z",
+      "created_at": "2025-09-18T20:24:17.111Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 51,
+      "ign": "yummy102",
+      "time_length": "2 weeks",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-10-02T20:24:17.100Z",
+      "created_at": "2025-09-18T20:24:17.273Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 52,
+      "ign": "daltsooo",
+      "time_length": "2 weeks",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-10-02T20:24:17.100Z",
+      "created_at": "2025-09-18T20:24:17.340Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 53,
+      "ign": "nbedwars",
+      "time_length": "2 months",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-11-27T18:37:51.847Z",
+      "created_at": "2025-09-27T18:37:51.858Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 54,
+      "ign": "skibidinbedwars",
+      "time_length": "2 months",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-11-27T18:37:51.847Z",
+      "created_at": "2025-09-27T18:37:51.978Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 55,
+      "ign": "belowaveragenon",
+      "time_length": "2 months",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-11-27T18:37:51.847Z",
+      "created_at": "2025-09-27T18:37:52.046Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 56,
+      "ign": "welfyz",
+      "time_length": "2 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-11-28T19:49:30.413Z",
+      "created_at": "2025-09-28T19:49:30.424Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 57,
+      "ign": "7mzaa",
+      "time_length": "2 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-12-02T22:51:27.754Z",
+      "created_at": "2025-10-02T22:51:27.766Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 59,
+      "ign": "riesenqrka",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-11-06T20:16:41.589Z",
+      "created_at": "2025-10-06T20:16:41.600Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 60,
+      "ign": "p1ok",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-11-06T20:36:18.623Z",
+      "created_at": "2025-10-06T20:36:18.633Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 61,
+      "ign": "ssslllpppeeeuuu",
+      "time_length": "6 months",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": "2026-04-08T23:31:59.385Z",
+      "created_at": "2025-10-08T23:31:59.396Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 62,
+      "ign": "kiyeu",
+      "time_length": "6 months",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": "2026-04-08T23:42:04.090Z",
+      "created_at": "2025-10-08T23:42:04.100Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 72,
+      "ign": "zelth",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:55.390Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 73,
+      "ign": "femboy1o",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:55.910Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 74,
+      "ign": "vallz0",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:55.979Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 75,
+      "ign": "vallzo",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.046Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 76,
+      "ign": "orychi",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.113Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 77,
+      "ign": "valentinoh",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.182Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 78,
+      "ign": "viiiiiiiiili",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.249Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 79,
+      "ign": "gangmemb3rvallzo",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.317Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 82,
+      "ign": "metromirror",
+      "time_length": "1 month",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": "2025-11-18T22:41:13.947Z",
+      "created_at": "2025-10-18T22:41:13.958Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 83,
+      "ign": "ohnry",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-12-10T22:11:43.114Z",
+      "created_at": "2025-11-10T22:11:43.126Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 84,
+      "ign": "televisa",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-12-11T21:07:07.797Z",
+      "created_at": "2025-11-11T21:07:07.817Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 85,
+      "ign": "reeeach",
+      "time_length": "2 weeks",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": "2025-12-06T01:29:11.275Z",
+      "created_at": "2025-11-22T01:29:11.287Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 87,
+      "ign": "karae",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-12-24T06:12:01.803Z",
+      "created_at": "2025-11-24T06:12:01.814Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 88,
+      "ign": "iluvwomenn",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-01-22T23:02:09.818Z",
+      "created_at": "2025-12-22T23:02:09.830Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 89,
+      "ign": "hottue",
+      "time_length": "1 month",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": "2026-01-24T17:08:29.447Z",
+      "created_at": "2025-12-24T17:08:29.458Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 91,
+      "ign": "veenry",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.575Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 92,
+      "ign": "crazy919",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.645Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 93,
+      "ign": "foqeee2",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.714Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 94,
+      "ign": "zeezeeeee",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.781Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 95,
+      "ign": "imnotchucky",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-01-30T22:13:12.556Z",
+      "created_at": "2025-12-30T22:13:12.568Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 96,
+      "ign": "ohnry",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-07T19:32:53.855Z",
+      "created_at": "2026-01-07T19:32:53.866Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 97,
+      "ign": "smute6666074",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-08T21:14:43.796Z",
+      "created_at": "2026-01-08T21:14:43.807Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 98,
+      "ign": "rexiva",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-09T19:11:03.611Z",
+      "created_at": "2026-01-09T19:11:03.631Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 99,
+      "ign": "idtw",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-12T22:08:10.447Z",
+      "created_at": "2026-01-12T22:08:10.458Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 100,
+      "ign": "xratmode",
+      "time_length": "Permanent",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": null,
+      "created_at": "2026-01-16T10:46:54.144Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 101,
+      "ign": "fattycheese",
+      "time_length": "Permanent",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": null,
+      "created_at": "2026-01-16T10:46:55.113Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 102,
+      "ign": "situation",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-03-02T19:12:27.585Z",
+      "created_at": "2026-02-02T19:12:27.596Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 103,
+      "ign": "gobeman",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-02-08T03:36:00.192Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 104,
+      "ign": "skinnynoonie",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2026-02-11T00:30:11.357Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 105,
+      "ign": "iflashy",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-03-11T16:50:03.026Z",
+      "created_at": "2026-02-11T16:50:03.037Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 106,
+      "ign": "ohnry",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-03-14T18:20:42.737Z",
+      "created_at": "2026-02-14T18:20:42.748Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 107,
+      "ign": "peekss",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-02-17T03:53:40.491Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 108,
+      "ign": "nivruthecptrader",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-03-18T17:18:40.691Z",
+      "created_at": "2026-02-18T17:18:40.702Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 109,
+      "ign": "unkownkid",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-03-23T08:10:14.771Z",
+      "created_at": "2026-02-23T08:10:14.783Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 110,
+      "ign": "frugos",
+      "time_length": "1 month",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": "2026-03-28T14:55:33.618Z",
+      "created_at": "2026-02-28T14:55:33.629Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 113,
+      "ign": "cocostaryuu",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-03-05T03:39:26.318Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 114,
+      "ign": "uhsix",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2026-03-07T06:30:49.626Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 115,
+      "ign": "xfirmative",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-07T18:48:02.207Z",
+      "created_at": "2026-03-07T18:48:02.218Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 116,
+      "ign": "safelogged",
+      "time_length": "Permanent",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": null,
+      "created_at": "2026-03-08T07:11:08.362Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 117,
+      "ign": "ploufa",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-09T23:04:37.544Z",
+      "created_at": "2026-03-09T23:04:37.554Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 118,
+      "ign": "dracula_gamerr",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-04-10T19:08:33.849Z",
+      "created_at": "2026-03-10T19:08:33.860Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 119,
+      "ign": "67littletimmy67",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-12T21:24:47.163Z",
+      "created_at": "2026-03-12T21:24:47.175Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 120,
+      "ign": "wizins",
+      "time_length": "6 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-09-14T01:05:16.298Z",
+      "created_at": "2026-03-14T01:05:16.310Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 121,
+      "ign": "masterdragonrna",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-04-14T20:07:19.320Z",
+      "created_at": "2026-03-14T20:07:19.333Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 122,
+      "ign": "ctrl_a_",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-16T22:14:26.993Z",
+      "created_at": "2026-03-16T22:14:27.004Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 128,
+      "ign": "dozzs",
+      "time_length": "permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-05-05T06:29:45.444Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 130,
+      "ign": "kingofotters",
+      "time_length": "permanent",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": null,
+      "created_at": "2026-05-09T22:13:41.963Z",
+      "discord_user_id": null
+    },
+    {
+      "id": 134,
+      "ign": "hexration",
+      "time_length": "permanent",
+      "reason": "Type E (Conduct II) — Allowed someone access to his pc, who used a glitch hexration was aware of to get staff, who then proceeded to ban multiple players. Refused to share who the perpetrator was.",
+      "blacklist_expires": null,
+      "created_at": "2026-05-24T22:25:25.651Z",
+      "discord_user_id": "1386002393052876810"
+    },
+    {
+      "id": 136,
+      "ign": "softcracker",
+      "time_length": "permanent",
+      "reason": "Type D (Conduct) — I have never seen this guy say anything positive ever. He brings nothing but toxicity to our community. He has been warned countless times, but he seems to have learned nothing. So now it is permanent. It is not appealable unless there is noticeable improvement in behavior and taking responsibility for his actions",
+      "blacklist_expires": null,
+      "created_at": "2026-06-01T19:15:48.397Z",
+      "discord_user_id": "459700347728953367"
+    }
+  ],
+  "admin_blacklists": [
+    {
+      "id": 15,
+      "ign": "fresh_creeper",
+      "time_length": "2 weeks",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-08-18T13:53:48.324Z",
+      "created_at": "2025-08-04T13:53:50.710Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 16,
+      "ign": "rgtg",
+      "time_length": "2 weeks",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-08-18T13:55:13.847Z",
+      "created_at": "2025-08-04T13:55:14.057Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 17,
+      "ign": "pactel",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2025-08-19T04:31:45.843Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 18,
+      "ign": "veltrohkissedme",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2025-09-12T17:51:16.296Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 23,
+      "ign": "carrboy",
+      "time_length": "2 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-11-16T00:57:06.616Z",
+      "created_at": "2025-09-16T00:57:06.719Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 39,
+      "ign": "daltso",
+      "time_length": "2 weeks",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-10-02T20:24:17.100Z",
+      "created_at": "2025-09-18T20:24:17.149Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 40,
+      "ign": "yummy102",
+      "time_length": "2 weeks",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-10-02T20:24:17.100Z",
+      "created_at": "2025-09-18T20:24:17.296Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 41,
+      "ign": "daltsooo",
+      "time_length": "2 weeks",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-10-02T20:24:17.100Z",
+      "created_at": "2025-09-18T20:24:17.363Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 42,
+      "ign": "nbedwars",
+      "time_length": "2 months",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-11-27T18:37:51.847Z",
+      "created_at": "2025-09-27T18:37:51.888Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 43,
+      "ign": "skibidinbedwars",
+      "time_length": "2 months",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-11-27T18:37:51.847Z",
+      "created_at": "2025-09-27T18:37:52.001Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 44,
+      "ign": "belowaveragenon",
+      "time_length": "2 months",
+      "reason": "Type C.2 (Security III)",
+      "blacklist_expires": "2025-11-27T18:37:51.847Z",
+      "created_at": "2025-09-27T18:37:52.068Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 45,
+      "ign": "welfyz",
+      "time_length": "2 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-11-28T19:49:30.413Z",
+      "created_at": "2025-09-28T19:49:30.457Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 46,
+      "ign": "7mzaa",
+      "time_length": "2 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-12-02T22:51:27.754Z",
+      "created_at": "2025-10-02T22:51:27.799Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 48,
+      "ign": "riesenqrka",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-11-06T20:16:41.589Z",
+      "created_at": "2025-10-06T20:16:41.633Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 49,
+      "ign": "p1ok",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2025-11-06T20:36:18.623Z",
+      "created_at": "2025-10-06T20:36:18.664Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 50,
+      "ign": "ssslllpppeeeuuu",
+      "time_length": "6 months",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": "2026-04-08T23:31:59.385Z",
+      "created_at": "2025-10-08T23:31:59.425Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 51,
+      "ign": "kiyeu",
+      "time_length": "6 months",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": "2026-04-08T23:42:04.090Z",
+      "created_at": "2025-10-08T23:42:04.127Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 61,
+      "ign": "zelth",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:55.427Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 62,
+      "ign": "femboy1o",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:55.933Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 63,
+      "ign": "vallz0",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.002Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 64,
+      "ign": "vallzo",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.069Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 65,
+      "ign": "orychi",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.136Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 66,
+      "ign": "valentinoh",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.205Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 67,
+      "ign": "viiiiiiiiili",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.272Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 68,
+      "ign": "gangmemb3rvallzo",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.341Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 69,
+      "ign": "testingcornchops",
+      "time_length": "Permanent",
+      "reason": "Type F (Conduct III)",
+      "blacklist_expires": null,
+      "created_at": "2025-10-13T23:37:56.408Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 71,
+      "ign": "metromirror",
+      "time_length": "1 month",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": "2025-11-18T22:41:13.947Z",
+      "created_at": "2025-10-18T22:41:13.990Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 72,
+      "ign": "ohnry",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-12-10T22:11:43.114Z",
+      "created_at": "2025-11-10T22:11:43.167Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 73,
+      "ign": "televisa",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-12-11T21:07:07.797Z",
+      "created_at": "2025-11-11T21:07:07.860Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 74,
+      "ign": "reeeach",
+      "time_length": "2 weeks",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": "2025-12-06T01:29:11.275Z",
+      "created_at": "2025-11-22T01:29:11.323Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 76,
+      "ign": "karae",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2025-12-24T06:12:01.803Z",
+      "created_at": "2025-11-24T06:12:01.845Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 77,
+      "ign": "iluvwomenn",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-01-22T23:02:09.818Z",
+      "created_at": "2025-12-22T23:02:09.869Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 78,
+      "ign": "hottue",
+      "time_length": "1 month",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": "2026-01-24T17:08:29.447Z",
+      "created_at": "2025-12-24T17:08:29.489Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 80,
+      "ign": "veenry",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.599Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 81,
+      "ign": "crazy919",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.667Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 82,
+      "ign": "foqeee2",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.737Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 83,
+      "ign": "zeezeeeee",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2025-12-26T23:29:11.804Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 84,
+      "ign": "imnotchucky",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-01-30T22:13:12.556Z",
+      "created_at": "2025-12-30T22:13:12.603Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 85,
+      "ign": "ohnry",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-07T19:32:53.855Z",
+      "created_at": "2026-01-07T19:32:53.899Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 86,
+      "ign": "smute6666074",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-08T21:14:43.796Z",
+      "created_at": "2026-01-08T21:14:43.843Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 87,
+      "ign": "rexiva",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-09T19:11:03.611Z",
+      "created_at": "2026-01-09T19:11:03.843Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 88,
+      "ign": "idtw",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-02-12T22:08:10.447Z",
+      "created_at": "2026-01-12T22:08:10.488Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 89,
+      "ign": "xratmode",
+      "time_length": "Permanent",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": null,
+      "created_at": "2026-01-16T10:46:54.178Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 90,
+      "ign": "fattycheese",
+      "time_length": "Permanent",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": null,
+      "created_at": "2026-01-16T10:46:55.135Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 91,
+      "ign": "situation",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-03-02T19:12:27.585Z",
+      "created_at": "2026-02-02T19:12:27.628Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 92,
+      "ign": "gobeman",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-02-08T03:36:00.218Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 93,
+      "ign": "skinnynoonie",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2026-02-11T00:30:11.390Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 94,
+      "ign": "iflashy",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-03-11T16:50:03.026Z",
+      "created_at": "2026-02-11T16:50:03.073Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 95,
+      "ign": "ohnry",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-03-14T18:20:42.737Z",
+      "created_at": "2026-02-14T18:20:42.784Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 96,
+      "ign": "peekss",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-02-17T03:53:40.528Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 97,
+      "ign": "nivruthecptrader",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-03-18T17:18:40.691Z",
+      "created_at": "2026-02-18T17:18:40.735Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 98,
+      "ign": "unkownkid",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-03-23T08:10:14.771Z",
+      "created_at": "2026-02-23T08:10:14.816Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 99,
+      "ign": "frugos",
+      "time_length": "1 month",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": "2026-03-28T14:55:33.618Z",
+      "created_at": "2026-02-28T14:55:33.666Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 102,
+      "ign": "cocostaryuu",
+      "time_length": "Permanent",
+      "reason": "Type D (Conduct)",
+      "blacklist_expires": null,
+      "created_at": "2026-03-05T03:39:26.378Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 103,
+      "ign": "uhsix",
+      "time_length": "Permanent",
+      "reason": "Type E (Conduct II)",
+      "blacklist_expires": null,
+      "created_at": "2026-03-07T06:30:49.662Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 104,
+      "ign": "xfirmative",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-07T18:48:02.207Z",
+      "created_at": "2026-03-07T18:48:02.249Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 105,
+      "ign": "safelogged",
+      "time_length": "Permanent",
+      "reason": "Type A.2 (Cheating II)",
+      "blacklist_expires": null,
+      "created_at": "2026-03-08T07:11:08.394Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 106,
+      "ign": "ploufa",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-09T23:04:37.544Z",
+      "created_at": "2026-03-09T23:04:37.586Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 107,
+      "ign": "dracula_gamerr",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-04-10T19:08:33.849Z",
+      "created_at": "2026-03-10T19:08:33.899Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 108,
+      "ign": "67littletimmy67",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-12T21:24:47.163Z",
+      "created_at": "2026-03-12T21:24:47.211Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 109,
+      "ign": "wizins",
+      "time_length": "6 months",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-09-14T01:05:16.298Z",
+      "created_at": "2026-03-14T01:05:16.343Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 110,
+      "ign": "masterdragonrna",
+      "time_length": "1 month",
+      "reason": "Type A.3 (Logging)",
+      "blacklist_expires": "2026-04-14T20:07:19.320Z",
+      "created_at": "2026-03-14T20:07:19.371Z",
+      "is_pardoned": false
+    },
+    {
+      "id": 111,
+      "ign": "ctrl_a_",
+      "time_length": "1 month",
+      "reason": "Type A (Cheating)",
+      "blacklist_expires": "2026-04-16T22:14:26.993Z",
+      "created_at": "2026-03-16T22:14:27.038Z",
+      "is_pardoned": false
+    }
+  ]
+}

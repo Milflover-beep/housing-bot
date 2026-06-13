@@ -1,0 +1,255 @@
+- ign: Snoozar
+  details: beamed account, bought beamed or used for beaming
+  evidence: not provided
+
+- ign: lifespend
+  details: malicious rumor mongering, false accusations of pedophilia (alt of wh1t_e)
+  evidence: not provided
+
+- ign: tagkitten5021
+  details: blatant cheating
+  evidence: not provided
+
+- ign: metalgearotaku
+  details: excessive interruptions
+  evidence: not provided
+
+- ign: bluetooths
+  details: accused a player to be a pdf with no proof, showed no remorse
+  evidence: not provided
+
+- ign: Yufra
+  details: fakelag alt account
+  evidence: not provided
+
+- ign: gregory67
+  details: blatant cheating boosting nbedwars's stats (owned by him)
+  evidence: not provided
+
+- ign: SanaJava
+  details: bhop
+  evidence: not provided
+
+- ign: Xx_PigGod_xX
+  details: bhop
+  evidence: not provided
+
+- ign: racksoncash
+  details: ban dodging, alting, inappropriate comments about another user
+  evidence: not provided
+
+- ign: vanish_mode
+  details: blatantly 0-100ing
+  evidence: not provided
+
+- ign: Salvador_Mendoza
+  details: cheating
+  evidence: not provided
+
+- ign: ohnry
+  details: blatant cheating, never unban (report alts)
+  evidence: not provided
+
+- ign: aoso
+  details: beaming and doxing
+  evidence: not provided
+
+- ign: swenkyy
+  details: flying bhopping while on an alt
+  evidence: not provided
+
+- ign: AOSO2GEEKED
+  details: beamer, doxxer, terrible person
+  evidence: not provided
+
+- ign: ssji
+  details: fovok, part of the trio of terror: Acash, Fovok, Unrisky
+  evidence: not provided
+
+- ign: Acash
+  details: beamer, doxxer, extorter, part of the trio of terror: Acash, Fovok, Unrisky
+  evidence: not provided
+
+- ign: KingEreen
+  details: malicious ban
+  evidence: not provided
+
+- ign: patfosh
+  details: part of the 4v8 gang, knew about nuke, did nothing to stop it, conspiracy, knew everything in that server
+  evidence: not provided
+
+- ign: ours
+  details: accusing others of pedophilia with no evidence, accusing other girls of participating in lewd acts and more
+  evidence: not provided
+
+- ign: citers
+  details: alt of ours, stonewalls and springs
+  evidence: not provided
+
+- ign: stonewalls
+  details: alt of ours, citers and springs
+  evidence: not provided
+
+- ign: springs
+  details: alt of ours, stonewalls and citers
+  evidence: not provided
+
+- ign: meapmeep
+  details: part of the 4v8 gang, knew about nuke, did nothing to stop it, conspiracy, knew everything in that server
+  evidence: not provided
+
+- ign: f9t
+  details: used a paid screensharing tool to come up bypasses, slandered a user with fake pedophile accusations/screenshots
+  evidence: not provided
+
+- ign: girlslovezad
+  details: previously known as MalsiasEkitten and zadsobased
+  evidence: not provided
+
+- ign: felonist
+  details: participated in beaming, chronic liar, manipulated players, vowed to destroy housing
+  evidence: not provided
+
+- ign: PyradeAlt3
+  details: attempted to frame pureglory for pedophilia, blackmailing 12 and younger, lied, false accusations
+  evidence: discord id: 1280729276731363358
+
+- ign: wh1t_e
+  details: malicious rumor mongering, false accusations of pedophilia
+  evidence: not provided
+
+- ign: atlqntics
+  details: malicious rumor mongering, false accusations of pedophilia, intent to lie and defame
+  evidence: not provided
+
+- ign: angvlr
+  details: malicious rumor mongering, false accusations of pedophilia, intent to lie and defame
+  evidence: not provided
+
+- ign: needlehaha
+  details: sending explicit content and imagery with minors
+  evidence: ign associated with the account 1112977799439990794
+
+- ign: fofs
+  details: sending explicit content and imagery with minors
+  evidence: ign associated with the account 1197736645642956845
+
+- ign: ilovedrinking
+  details: encouraging targeted harassment, sharing explicit content to rbw general chat while in the presence of minors
+  evidence: not provided
+
+- ign: lostshakerofsalt
+  details: consistently banned for ruining the game experience and intentionally still ruins the game experience for others
+  evidence: not provided
+
+- ign: kowombo
+  details: ban evading on alt
+  evidence: not provided
+
+- ign: interviews
+  details: 3rd cheating ban, lied about blatant proof, doesn't show any will to reform himself or improve in any way. Therefore, permanent.
+  evidence: not provided
+
+- ign: kittymandem
+  details: vpovs alt
+  evidence: not provided
+
+- ign: vpov
+  details: sexual remarks towards and in the presence of underage teens, manipulator, alted to get staff
+  evidence: not provided
+
+- ign: nrdx
+  details: abusing staff without permission
+  evidence: not provided
+
+- ign: Zoobo
+  details: abusing staff without permission (nrdx's alt)
+  evidence: not provided
+
+- ign: Ploufa
+  details: chronic cheater, no shame, remorse or showing any sign of wanting to improve or change his ways
+  evidence: not provided
+
+- ign: KomatsunaZ
+  details: 30+ warns, dodging staff to avoid punishment, been banned before, no remorse nor a care to change his ways
+  evidence: not provided
+
+- ign: bertybot
+  details: bypassing in chat constantly
+  evidence: https://youtu.be/lUT6GFx0vec
+
+- ign: zonixers
+  details: flying in arena
+  evidence: not provided
+
+- ign: sunxin
+  details: flying in arena
+  evidence: not provided
+
+- ign: SuperAllice
+  details: flying in arena
+  evidence: not provided
+
+- ign: Tyc3r
+  details: interrupting and repeatedly targeting player
+  evidence: not provided
+
+- ign: chalkasaurus
+  details: repeated interruptions and targeting 1 player
+  evidence: not provided
+
+- ign: reddicle_
+  details: repeated interruptions
+  evidence: not provided
+
+- ign: Vistopia
+  details: said words that should not even be repeated
+  evidence: https://youtu.be/aOWladQDYI0
+
+- ign: GreeeenX
+  details: 2nd ban, flight
+  evidence: not provided
+
+- ign: stevemc21
+  details: botting
+  evidence: not provided
+
+- ign: brodybhere2
+  details: botting
+  evidence: not provided
+
+- ign: stormz0ne
+  details: Yonna beamed someone while logged in on it. Gezu is going to request it be unbanned once he knows he's the only one with access
+  evidence: not provided
+
+- ign: buvtack
+  details: cheating, lying about it, cheated against an admin, chronically online and needs to touch grass
+  evidence: not provided
+
+- ign: MadeInJakarta
+  details: cheating and dodging bans by joining on different nicks
+  evidence: not provided
+
+- ign: creasex
+  details: cheating and ban dodging by leaving and joining on different nicks
+  evidence: not provided
+
+- ign: 123sleep123
+  details: blatant cheater
+  evidence: not provided
+
+- ign: COWYxGFALL
+  details: abused friends and cheated in ranked
+  evidence: not provided
+
+- ign: astronxmy
+  details: ragebait staff and guests, sexual comments, no remorse showed in ticket to appeal -> behavioral ban
+  evidence: ticket 1510839791950762074
+
+- ign: Hexration
+  details: lying about who was responsible for griefing housing, insulted admins, attempted to emotionally manipulate a head admin
+  evidence: more details in their transcript
+
+- ign: Welfyz
+  details: dox threats against management, banned by the owner, repeat offender, doesn't learn from his mistakes nor does he acknowledge them, never accept an appeal unless very serious shift in behaviour over an extended period of time
+  evidence: not provided

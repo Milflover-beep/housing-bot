@@ -947,6 +947,7 @@ module.exports = function punishmentCommands(ctx) {
             `🚫 **Currently punished:** YES (${punishmentTypeLabel(currentPunishment.punishment)} #${currentPunishment.id})\n` +
             `Reason: ${currentPunishment.punishment_details || '—'}\n` +
             `Evidence: ${currentPunishment.evidence || '—'}\n` +
+            `Logged by: ${currentPunishment.staff_ign || '—'}\n` +
             `Expires: ${expiresText}`
           );
         })()
@@ -972,6 +973,7 @@ module.exports = function punishmentCommands(ctx) {
             `**#${row.id}** (${punishmentTypeLabel(row.punishment)}) — ${row.created_at ? new Date(row.created_at).toLocaleString() : '—'}\n` +
             `Reason: ${row.punishment_details || '—'}\n` +
             `Evidence: ${row.evidence || '—'}\n` +
+            `Logged by: ${row.staff_ign || '—'}\n` +
             `Status: ${row.status || '—'} / ${row.punishment_status || '—'}\n` +
             `Expires: ${expiresText}`
           );
@@ -1112,6 +1114,22 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({ content: '❌ Staff or higher only.' });
     }
     const includePermanent = interaction.options.getBoolean('permanent') === true;
+    const ABSURD_DURATION_MS = 365 * 24 * 60 * 60 * 1000; // 1 year+
+    const isPermanentLike = (row) => {
+      const raw = String(row?.cooldown_raw || '')
+        .trim()
+        .toLowerCase();
+      if (!raw) return true; // no time stored => treat as permanent-like
+      if (raw === '-1') return true;
+      if (!row?.reversal_remind_at) return true; // no known end time => permanent-like
+      const m = raw.match(/^(\d+)\s*([dhm])$/i);
+      if (!m) return true; // unknown duration format => permanent-like
+      const n = Number(m[1]);
+      const u = m[2].toLowerCase();
+      if (!Number.isFinite(n) || n <= 0) return true;
+      const ms = u === 'd' ? n * 86400000 : u === 'h' ? n * 3600000 : n * 60000;
+      return ms >= ABSURD_DURATION_MS;
+    };
     try {
       let r;
       try {
@@ -1174,11 +1192,11 @@ module.exports = function punishmentCommands(ctx) {
       }
       const filteredRows = includePermanent
         ? r.rows
-        : r.rows.filter((row) => String(row.cooldown_raw || '').trim() !== '-1');
+        : r.rows.filter((row) => !isPermanentLike(row));
       if (filteredRows.length === 0) {
         return interaction.editReply({
           content:
-            'No active non-permanent punishments right now.\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent bans.**',
+            'No active non-permanent punishments right now.\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent/unknown/absurd-duration entries.**',
         });
       }
       const lines = await Promise.all(
@@ -1216,7 +1234,7 @@ module.exports = function punishmentCommands(ctx) {
 
       const filterNote = includePermanent
         ? ''
-        : '\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent bans.**';
+        : '\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent/unknown/absurd-duration entries.**';
       const formatPage = (body, idx, total) => {
         const note = !includePermanent && idx === total - 1 ? filterNote : '';
         return `**Active punishments** (page ${idx + 1}/${total})\n${body}${note}`.slice(0, 2000);
