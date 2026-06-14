@@ -45,11 +45,21 @@ module.exports = function punishmentCommands(ctx) {
   }
 
   function punishmentActionLabel(kind) {
-    return String(kind || '').trim().toLowerCase() === 'mute' ? 'unmute' : 'unban';
+    const t = String(kind || '').trim().toLowerCase();
+    if (t === 'mute') return 'unmute';
+    if (t === 'ranked_ban') return 'ranked unban';
+    return 'unban';
   }
 
   function punishmentTypeLabel(kind) {
-    return String(kind || '').trim().toLowerCase() === 'mute' ? 'Mute' : 'Ban';
+    const t = String(kind || '').trim().toLowerCase();
+    if (t === 'mute') return 'Mute';
+    if (t === 'ranked_ban') return 'Ranked Ban';
+    return 'Ban';
+  }
+
+  function shouldSendExpiryReminder(kind) {
+    return String(kind || '').trim().toLowerCase() !== 'ranked_ban';
   }
 
   const mojangNameCache = new Map();
@@ -106,6 +116,7 @@ module.exports = function punishmentCommands(ctx) {
   }
 
   async function sendImmediateUnbanPing(client, logRow) {
+    if (!shouldSendExpiryReminder(logRow?.punishment)) return;
     const channelId = getPunishmentPingsChannelId();
     if (!channelId) return;
     const ch = await client.channels.fetch(channelId).catch(() => null);
@@ -120,7 +131,8 @@ module.exports = function punishmentCommands(ctx) {
   }
 
   async function nextProgressiveCooldownRaw(userIgn, punishmentType = 'ban', userUuid = null) {
-    const normalizedType = String(punishmentType || 'ban').trim().toLowerCase() === 'mute' ? 'mute' : 'ban';
+    const kind = String(punishmentType || 'ban').trim().toLowerCase();
+    const normalizedType = kind === 'mute' ? 'mute' : 'ban';
     const normalizedUuid = normalizeUuidCompact(userUuid);
     const r = await pool.query(
       `SELECT COUNT(*)::int AS c
@@ -520,9 +532,14 @@ module.exports = function punishmentCommands(ctx) {
       return interaction.editReply({ content: '❌ **Evidence** is required.' });
     }
     const punishmentType = interaction.options.getString('punishment-type') || 'ban';
-    const cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
+    const cooldownRaw =
+      String(punishmentType).toLowerCase() === 'ranked_ban'
+        ? '7d'
+        : await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
     const cooldownMs = parseCooldownToMs(cooldownRaw);
-    const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
+    const reversalAt = shouldSendExpiryReminder(punishmentType) && cooldownMs
+      ? new Date(Date.now() + cooldownMs)
+      : null;
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
     const submitterLevel = getMemberLevel(member);
@@ -578,7 +595,9 @@ module.exports = function punishmentCommands(ctx) {
         content:
           `✅ Logged ${punishmentTypeLabel(punishmentType).toLowerCase()} punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
           `Duration set to **${cooldownRaw}** (${
-            String(punishmentType || '').toLowerCase() === 'ban'
+            String(punishmentType || '').toLowerCase() === 'ranked_ban'
+              ? 'fixed 7d by default (no progressive increase)'
+              : String(punishmentType || '').toLowerCase() === 'ban'
               ? 'progressive 3d -> 12d -> 48d...'
               : 'progressive 3d -> 6d -> 12d...'
           }). Use **/checkqueue** (pages + Accept/Deny).`,
@@ -619,8 +638,12 @@ module.exports = function punishmentCommands(ctx) {
       banDurationOpt && String(banDurationOpt).trim() ? String(banDurationOpt).trim() : '';
     let progressiveBan = false;
     if (!cooldownRaw) {
-      cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
-      progressiveBan = true;
+      if (String(punishmentType || '').toLowerCase() === 'ranked_ban') {
+        cooldownRaw = '7d';
+      } else {
+        cooldownRaw = await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
+        progressiveBan = true;
+      }
     }
     const isPermanentBan = cooldownRaw === '-1';
     const cooldownMs = isPermanentBan ? null : parseCooldownToMs(cooldownRaw);
@@ -630,7 +653,10 @@ module.exports = function punishmentCommands(ctx) {
           '❌ Invalid **ban duration**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`), or `-1` for permanent. Leave blank to use normal progressive duration.',
       });
     }
-    const reversalAt = isPermanentBan ? null : new Date(Date.now() + cooldownMs);
+    const reversalAt =
+      isPermanentBan || !shouldSendExpiryReminder(punishmentType)
+        ? null
+        : new Date(Date.now() + cooldownMs);
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
     const submitterLevel = getMemberLevel(member);
@@ -686,6 +712,8 @@ module.exports = function punishmentCommands(ctx) {
         `${
           progressiveBan
             ? 'Auto progressive ban duration'
+            : String(punishmentType || '').toLowerCase() === 'ranked_ban'
+              ? 'Ranked ban duration'
             : isPermanentBan
               ? 'Custom ban duration (permanent)'
               : 'Custom ban duration'
@@ -1274,9 +1302,13 @@ module.exports = function punishmentCommands(ctx) {
       .addStringOption((o) =>
         o
           .setName('punishment-type')
-          .setDescription('ban or mute (default: ban)')
+          .setDescription('ban, mute, or ranked ban (default: ban)')
           .setRequired(false)
-          .addChoices({ name: 'Ban', value: 'ban' }, { name: 'Mute', value: 'mute' })
+          .addChoices(
+            { name: 'Ban', value: 'ban' },
+            { name: 'Mute', value: 'mute' },
+            { name: 'Ranked Ban', value: 'ranked_ban' }
+          )
       ),
     new SlashCommandBuilder()
       .setName('adminlog')
@@ -1286,9 +1318,13 @@ module.exports = function punishmentCommands(ctx) {
       .addStringOption((o) =>
         o
           .setName('punishment-type')
-          .setDescription('ban or mute (default: ban)')
+          .setDescription('ban, mute, or ranked ban (default: ban)')
           .setRequired(false)
-          .addChoices({ name: 'Ban', value: 'ban' }, { name: 'Mute', value: 'mute' })
+          .addChoices(
+            { name: 'Ban', value: 'ban' },
+            { name: 'Mute', value: 'mute' },
+            { name: 'Ranked Ban', value: 'ranked_ban' }
+          )
       )
       .addStringOption((o) =>
         o

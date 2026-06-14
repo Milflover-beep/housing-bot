@@ -83,6 +83,7 @@ function startPunishmentExpiryPoller(client, pool) {
          WHERE id IN (
            SELECT id FROM punishment_logs
            WHERE punishment_status IN ('pending_review', 'active')
+             AND LOWER(COALESCE(TRIM(punishment), 'ban')) <> 'ranked_ban'
              AND reversal_remind_at IS NOT NULL
              AND reversal_remind_at <= NOW()
              AND COALESCE(reversal_reminded, false) = false
