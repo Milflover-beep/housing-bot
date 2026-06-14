@@ -1237,7 +1237,7 @@ module.exports = function punishmentCommands(ctx) {
       if (filteredRows.length === 0) {
         return interaction.editReply({
           content:
-            'No active non-permanent punishments right now.\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent/unknown/absurd-duration entries.**',
+            'No active non-permanent punishments right now.\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments.**',
         });
       }
       const lines = await Promise.all(
@@ -1275,7 +1275,7 @@ module.exports = function punishmentCommands(ctx) {
 
       const filterNote = includePermanent
         ? ''
-        : '\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments including permanent/unknown/absurd-duration entries.**';
+        : '\n\n**This only shows non-permanent punishments. Use `/activepunishments permanent:true` to see all punishments.**';
       const formatPage = (body, idx, total) => {
         const note = !includePermanent && idx === total - 1 ? filterNote : '';
         return `**Active punishments** (page ${idx + 1}/${total})\n${body}${note}`.slice(0, 2000);
