@@ -873,7 +873,11 @@ module.exports = function punishmentCommands(ctx) {
             remaining = 'permanent (never)';
           } else if (row.reversal_remind_at) {
             const endAt = new Date(row.reversal_remind_at);
-            remaining = `${formatRemaining(endAt.getTime() - Date.now())} (until ${endAt.toLocaleString()})`;
+            if (endAt.getTime() <= Date.now()) {
+              remaining = `expired ${endAt.toLocaleString()}`;
+            } else {
+              remaining = `expires ${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - Date.now())} remaining)`;
+            }
           } else if (row.status === 'active' && row.punishment_status === 'active') {
             remaining = 'unknown';
           }
