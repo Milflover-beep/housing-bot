@@ -886,11 +886,14 @@ module.exports = function punishmentCommands(ctx) {
       })),
       ...bl.rows.map((row) => ({
         t: new Date(row.created_at).getTime(),
-        line: `**Blacklist** #${row.id} — ${row.reason || '?'} (${row.time_length || '?'})${
-          row.blacklist_expires
-            ? ` — expires ${new Date(row.blacklist_expires).toLocaleString()}`
-            : ''
-        }`,
+        line: (() => {
+          if (!row.blacklist_expires) {
+            return `**Blacklist** #${row.id} — ${row.reason || '?'} (${row.time_length || '?'})`;
+          }
+          const endAt = new Date(row.blacklist_expires);
+          const label = endAt.getTime() <= Date.now() ? 'expired' : 'expires';
+          return `**Blacklist** #${row.id} — ${row.reason || '?'} (${row.time_length || '?'}) — ${label} ${endAt.toLocaleString()}`;
+        })(),
       })),
     ]
       .sort((a, b) => b.t - a.t)
