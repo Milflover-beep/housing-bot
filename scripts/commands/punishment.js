@@ -47,7 +47,7 @@ module.exports = function punishmentCommands(ctx) {
   function punishmentActionLabel(kind) {
     const t = String(kind || '').trim().toLowerCase();
     if (t === 'mute') return 'unmute';
-    if (t === 'ranked_ban') return 'ranked unban';
+    if (t === 'ranked_ban') return 'unranked ban';
     return 'unban';
   }
 
@@ -116,7 +116,6 @@ module.exports = function punishmentCommands(ctx) {
   }
 
   async function sendImmediateUnbanPing(client, logRow) {
-    if (!shouldSendExpiryReminder(logRow?.punishment)) return;
     const channelId = getPunishmentPingsChannelId();
     if (!channelId) return;
     const ch = await client.channels.fetch(channelId).catch(() => null);
@@ -594,13 +593,15 @@ module.exports = function punishmentCommands(ctx) {
       await interaction.editReply({
         content:
           `✅ Logged ${punishmentTypeLabel(punishmentType).toLowerCase()} punishment **#${logId}** for **${userIgn}** and added it to the **review queue**.\n` +
-          `Duration set to **${cooldownRaw}** (${
+          `${
             String(punishmentType || '').toLowerCase() === 'ranked_ban'
-              ? 'fixed 7d by default (no progressive increase)'
-              : String(punishmentType || '').toLowerCase() === 'ban'
-              ? 'progressive 3d -> 12d -> 48d...'
-              : 'progressive 3d -> 6d -> 12d...'
-          }). Use **/checkqueue** (pages + Accept/Deny).`,
+              ? 'Duration set to **7d** by default.'
+              : `Duration set to **${cooldownRaw}** (${
+                  String(punishmentType || '').toLowerCase() === 'ban'
+                    ? 'progressive 3d -> 12d -> 48d...'
+                    : 'progressive 3d -> 6d -> 12d...'
+                }). Use **/checkqueue** (pages + Accept/Deny).`
+          }`,
       });
     } catch (e) {
       console.error('handleLog:', e);
