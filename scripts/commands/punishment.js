@@ -58,6 +58,19 @@ module.exports = function punishmentCommands(ctx) {
     return 'Ban';
   }
 
+  function resolvePunishmentEndAt(row) {
+    if (row?.reversal_remind_at) return new Date(row.reversal_remind_at);
+    const raw = String(row?.cooldown_raw || '').trim();
+    if (!raw || raw === '-1') return null;
+    const ms = parseCooldownToMs(raw);
+    if (!Number.isFinite(ms) || ms <= 0) return null;
+    const base = row?.created_at || row?.date;
+    if (!base) return null;
+    const baseMs = new Date(base).getTime();
+    if (!Number.isFinite(baseMs)) return null;
+    return new Date(baseMs + ms);
+  }
+
   function shouldSendExpiryReminder(kind) {
     return String(kind || '').trim().toLowerCase() !== 'ranked_ban';
   }
@@ -536,9 +549,7 @@ module.exports = function punishmentCommands(ctx) {
         ? '7d'
         : await nextProgressiveCooldownRaw(userIgn, punishmentType, userUuid);
     const cooldownMs = parseCooldownToMs(cooldownRaw);
-    const reversalAt = shouldSendExpiryReminder(punishmentType) && cooldownMs
-      ? new Date(Date.now() + cooldownMs)
-      : null;
+    const reversalAt = cooldownMs ? new Date(Date.now() + cooldownMs) : null;
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
     const submitterLevel = getMemberLevel(member);
@@ -654,10 +665,7 @@ module.exports = function punishmentCommands(ctx) {
           '❌ Invalid **ban duration**. Use one number and one unit: **`d`** days, **`h`** hours, **`m`** minutes (e.g. `1d`, `12h`, `1m`), or `-1` for permanent. Leave blank to use normal progressive duration.',
       });
     }
-    const reversalAt =
-      isPermanentBan || !shouldSendExpiryReminder(punishmentType)
-        ? null
-        : new Date(Date.now() + cooldownMs);
+    const reversalAt = isPermanentBan ? null : new Date(Date.now() + cooldownMs);
     const staffIgn = interaction.user.username;
     const staffDiscordId = String(interaction.user.id);
     const submitterLevel = getMemberLevel(member);
@@ -962,15 +970,17 @@ module.exports = function punishmentCommands(ctx) {
           let expiresText = 'unknown';
           if (String(currentPunishment.cooldown_raw || '').trim() === '-1') {
             expiresText = 'permanent';
-          } else if (currentPunishment.reversal_remind_at) {
-            const endAt = new Date(currentPunishment.reversal_remind_at);
-            expiresText = `${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - now)} remaining)`;
-          } else if (
-            String(currentPunishment.punishment_status || '')
-              .trim()
-              .toLowerCase() === 'pending_review'
-          ) {
-            expiresText = 'pending review';
+          } else {
+            const endAt = resolvePunishmentEndAt(currentPunishment);
+            if (endAt) {
+              expiresText = `${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - now)} remaining)`;
+            } else if (
+              String(currentPunishment.punishment_status || '')
+                .trim()
+                .toLowerCase() === 'pending_review'
+            ) {
+              expiresText = 'pending review';
+            }
           }
           return (
             `🚫 **Currently punished:** YES (${punishmentTypeLabel(currentPunishment.punishment)} #${currentPunishment.id})\n` +
@@ -988,15 +998,17 @@ module.exports = function punishmentCommands(ctx) {
           let expiresText = 'unknown';
           if (String(row.cooldown_raw || '').trim() === '-1') {
             expiresText = 'permanent';
-          } else if (row.reversal_remind_at) {
-            const endAt = new Date(row.reversal_remind_at);
-            expiresText = `${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - now)} remaining)`;
-          } else if (
-            String(row.punishment_status || '')
-              .trim()
-              .toLowerCase() === 'pending_review'
-          ) {
-            expiresText = 'pending review';
+          } else {
+            const endAt = resolvePunishmentEndAt(row);
+            if (endAt) {
+              expiresText = `${endAt.toLocaleString()} (${formatRemaining(endAt.getTime() - now)} remaining)`;
+            } else if (
+              String(row.punishment_status || '')
+                .trim()
+                .toLowerCase() === 'pending_review'
+            ) {
+              expiresText = 'pending review';
+            }
           }
           return (
             `**#${row.id}** (${punishmentTypeLabel(row.punishment)}) — ${row.created_at ? new Date(row.created_at).toLocaleString() : '—'}\n` +
