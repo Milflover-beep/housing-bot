@@ -1079,7 +1079,6 @@ module.exports = function punishmentCommands(ctx) {
           } — ${(row.punishment_details || 'no reason').slice(0, 120)}`
       );
       const PAGE_BODY_MAX = 1750;
-      const MAX_PAGES = 10;
       const pages = [];
       let current = '';
       for (const line of lines) {
@@ -1098,21 +1097,14 @@ module.exports = function punishmentCommands(ctx) {
       if (!pages.length) pages.push('_No rows._');
 
       const totalPages = pages.length;
-      const shownPages = Math.min(totalPages, MAX_PAGES);
-      const formatPage = (body, idx, total, truncated) => {
-        const suffix =
-          truncated && idx === total - 1
-            ? `\n\n⚠️ Showing first ${MAX_PAGES} pages only.`
-            : '';
-        return `**Ban logs** (page ${idx + 1}/${totalPages})\n${body}${suffix}`.slice(0, 2000);
-      };
+      const formatPage = (body, idx) => `**Ban logs** (page ${idx + 1}/${totalPages})\n${body}`.slice(0, 2000);
 
       await interaction.editReply({
-        content: formatPage(pages[0], 0, shownPages, totalPages > MAX_PAGES),
+        content: formatPage(pages[0], 0),
       });
-      for (let i = 1; i < shownPages; i += 1) {
+      for (let i = 1; i < totalPages; i += 1) {
         await interaction.followUp({
-          content: formatPage(pages[i], i, shownPages, totalPages > MAX_PAGES),
+          content: formatPage(pages[i], i),
           flags: MessageFlags.Ephemeral,
         });
       }
