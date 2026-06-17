@@ -740,23 +740,48 @@ module.exports = function punishmentCommands(ctx) {
     const isWorstRanking = ranking === 'worst';
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
+    const rangeStart = start && end ? new Date(start) : null;
+    const rangeEnd = start && end ? new Date(end) : null;
+    const ticketCategoryIds = String(process.env.CHECK_RENAME_CATEGORY_IDS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (!staffUser) {
       const leaderboardSize = start && end ? 3 : 6;
       const orderClause = isWorstRanking ? 'total ASC, staff_id ASC' : 'total DESC, staff_id ASC';
       const top = await pool.query(
-        `SELECT
-           discord_user AS staff_id,
-           COUNT(*)::int AS total,
-           SUM(CASE WHEN status = 'active' AND punishment_status = 'active' THEN 1 ELSE 0 END)::int AS accepted,
-           SUM(CASE WHEN punishment_status = 'denied' THEN 1 ELSE 0 END)::int AS denied
-         FROM punishment_logs
-         WHERE COALESCE(TRIM(discord_user), '') <> ''
-           AND ($1::timestamptz IS NULL OR created_at >= $1)
-           AND ($2::timestamptz IS NULL OR created_at <= $2)
-         GROUP BY discord_user
+        `WITH punish AS (
+           SELECT
+             discord_user AS staff_id,
+             COUNT(*)::int AS total,
+             SUM(CASE WHEN status = 'active' AND punishment_status = 'active' THEN 1 ELSE 0 END)::int AS accepted,
+             SUM(CASE WHEN punishment_status = 'denied' THEN 1 ELSE 0 END)::int AS denied
+           FROM punishment_logs
+           WHERE COALESCE(TRIM(discord_user), '') <> ''
+             AND ($1::timestamptz IS NULL OR created_at >= $1)
+             AND ($2::timestamptz IS NULL OR created_at <= $2)
+           GROUP BY discord_user
+         ),
+         activity AS (
+           SELECT
+             staff_discord_id AS staff_id,
+             SUM(CASE WHEN category_id = ANY($3::text[]) THEN 1 ELSE 0 END)::int AS ticket_commands
+           FROM staff_activity_logs
+           WHERE ($1::timestamptz IS NULL OR created_at >= $1)
+             AND ($2::timestamptz IS NULL OR created_at <= $2)
+           GROUP BY staff_discord_id
+         )
+         SELECT
+           p.staff_id,
+           p.total,
+           p.accepted,
+           p.denied,
+           COALESCE(a.ticket_commands, 0)::int AS ticket_commands
+         FROM punish p
+         LEFT JOIN activity a ON a.staff_id = p.staff_id
          ORDER BY ${orderClause}
-         LIMIT $3`,
-        [start && end ? new Date(start) : null, start && end ? new Date(end) : null, leaderboardSize]
+         LIMIT $4`,
+        [rangeStart, rangeEnd, ticketCategoryIds, leaderboardSize]
       );
       if (!top.rows.length) {
         return interaction.editReply({
@@ -778,9 +803,17 @@ module.exports = function punishmentCommands(ctx) {
         const denied = row.denied || 0;
         const decided = accepted + denied;
         const accuracy = decided > 0 ? ((accepted / decided) * 100).toFixed(1) : '0.0';
+        const ticketCommands = row.ticket_commands || 0;
+        const staffId = String(row.staff_id || '').trim();
+        const isSnowflake = /^\d{17,20}$/.test(staffId);
+        let staffLabel = staffId || 'unknown';
+        if (isSnowflake && interaction.guild) {
+          const m = await interaction.guild.members.fetch(staffId).catch(() => null);
+          if (m) staffLabel = `${m.displayName} (${staffId})`;
+        }
         fields.push({
-          name: `${medals[i] || '🏅'} #${i + 1} — <@${row.staff_id}>`,
-          value: `**Logs:** ${total}\n**Accepted:** ${accepted}\n**Denied:** ${denied}\n**Accuracy:** ${accuracy}%`,
+          name: `${medals[i] || '🏅'} #${i + 1} — ${staffLabel}`,
+          value: `**Logs:** ${total}\n**Accepted:** ${accepted}\n**Denied:** ${denied}\n**Accuracy:** ${accuracy}%\n**Ticket commands:** ${ticketCommands}`,
           inline: true,
         });
       }
@@ -810,11 +843,6 @@ module.exports = function punishmentCommands(ctx) {
       activityWhere += ' AND created_at BETWEEN $2 AND $3';
       activityParams.push(new Date(start), new Date(end));
     }
-
-    const ticketCategoryIds = String(process.env.CHECK_RENAME_CATEGORY_IDS || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
 
     const [r, activitySummary, topCommands] = await Promise.all([
       pool.query(
