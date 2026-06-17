@@ -735,10 +735,69 @@ module.exports = function punishmentCommands(ctx) {
     if (!requireLevel(interaction.member, 3)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
-    const staffUser = interaction.options.getUser('discord', true);
-    const staffId = String(staffUser.id);
+    const staffUser = interaction.options.getUser('discord');
+    const ranking = interaction.options.getString('ranking') || 'best';
+    const isWorstRanking = ranking === 'worst';
     const start = interaction.options.getString('start-date');
     const end = interaction.options.getString('end-date');
+    if (!staffUser) {
+      const leaderboardSize = start && end ? 3 : 6;
+      const orderClause = isWorstRanking ? 'total ASC, staff_id ASC' : 'total DESC, staff_id ASC';
+      const top = await pool.query(
+        `SELECT
+           discord_user AS staff_id,
+           COUNT(*)::int AS total,
+           SUM(CASE WHEN status = 'active' AND punishment_status = 'active' THEN 1 ELSE 0 END)::int AS accepted,
+           SUM(CASE WHEN punishment_status = 'denied' THEN 1 ELSE 0 END)::int AS denied
+         FROM punishment_logs
+         WHERE COALESCE(TRIM(discord_user), '') <> ''
+           AND ($1::timestamptz IS NULL OR created_at >= $1)
+           AND ($2::timestamptz IS NULL OR created_at <= $2)
+         GROUP BY discord_user
+         ORDER BY ${orderClause}
+         LIMIT $3`,
+        [start && end ? new Date(start) : null, start && end ? new Date(end) : null, leaderboardSize]
+      );
+      if (!top.rows.length) {
+        return interaction.editReply({
+          content: 'No staff punishment logs found for this range.',
+        });
+      }
+      const medals = isWorstRanking
+        ? ['🧊', '🧊', '🧊', '▫️', '▫️', '▫️']
+        : ['🥇', '🥈', '🥉', '🏅', '🏅', '🏅'];
+      const fields = [];
+      for (let i = 0; i < leaderboardSize; i += 1) {
+        const row = top.rows[i];
+        if (!row) {
+          fields.push({ name: `${medals[i] || '🏅'} #${i + 1}`, value: '—', inline: true });
+          continue;
+        }
+        const total = row.total || 0;
+        const accepted = row.accepted || 0;
+        const denied = row.denied || 0;
+        const decided = accepted + denied;
+        const accuracy = decided > 0 ? ((accepted / decided) * 100).toFixed(1) : '0.0';
+        fields.push({
+          name: `${medals[i] || '🏅'} #${i + 1} — <@${row.staff_id}>`,
+          value: `**Logs:** ${total}\n**Accepted:** ${accepted}\n**Denied:** ${denied}\n**Accuracy:** ${accuracy}%`,
+          inline: true,
+        });
+      }
+      const rangeLine = start && end ? `**Date Range:** ${start} to ${end}` : '**Date Range:** All time';
+      const embed = new EmbedBuilder()
+        .setTitle(isWorstRanking ? '📉 Lowest Staff Punishment Activity' : '📊 Top Staff Punishment Activity')
+        .setColor(0x3498db)
+        .setDescription(
+          isWorstRanking
+            ? `Bottom ${leaderboardSize} staff by punishment logs\n\n${rangeLine}`
+            : `Top ${leaderboardSize} staff by punishment logs\n\n${rangeLine}`
+        )
+        .addFields(fields)
+        .setTimestamp();
+      return interaction.editReply({ embeds: [embed] });
+    }
+    const staffId = String(staffUser.id);
     const params = [staffId];
     let where = `discord_user = $1`;
     if (start && end) {
@@ -1354,13 +1413,23 @@ module.exports = function punishmentCommands(ctx) {
       ),
     new SlashCommandBuilder()
       .setName('staffstats')
-      .setDescription('View punishment log count and accuracy for a staff member')
-      .addUserOption((o) => o.setName('discord').setDescription('Staff Discord user').setRequired(true))
+      .setDescription('View staff punishment stats; omit discord for leaderboard')
+      .addUserOption((o) => o.setName('discord').setDescription('Staff Discord user (optional)').setRequired(false))
       .addStringOption((o) =>
         o.setName('start-date').setDescription('ISO date start (optional)').setRequired(false)
       )
       .addStringOption((o) =>
         o.setName('end-date').setDescription('ISO date end (optional)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o
+          .setName('ranking')
+          .setDescription('Leaderboard direction when discord is omitted')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Best (most logs)', value: 'best' },
+            { name: 'Worst (fewest logs)', value: 'worst' }
+          )
       ),
     new SlashCommandBuilder()
       .setName('history')
