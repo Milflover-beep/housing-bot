@@ -29,6 +29,7 @@ module.exports = function punishmentCommands(ctx) {
   } = ctx;
 
   const HEAD_ADMIN_ROLE_IDS = parseRoleIdList('BOT_ROLE_HEAD_ADMIN_ID');
+  const HEAD_STAFF_ROLE_IDS = parseRoleIdList('BOT_ROLE_HEAD_STAFF_ID');
 
   function formatRemaining(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return 'expired';
@@ -178,6 +179,10 @@ module.exports = function punishmentCommands(ctx) {
 
   function isHeadAdmin(member) {
     return HEAD_ADMIN_ROLE_IDS.length > 0 && HEAD_ADMIN_ROLE_IDS.some((id) => hasRoleId(member, id));
+  }
+
+  function isHeadStaff(member) {
+    return HEAD_STAFF_ROLE_IDS.length > 0 && HEAD_STAFF_ROLE_IDS.some((id) => hasRoleId(member, id));
   }
 
   function canReviewerHandleSubmitter(reviewer, submitter) {
@@ -732,7 +737,7 @@ module.exports = function punishmentCommands(ctx) {
 
   async function handleStaffstats(interaction) {
     await defer(interaction, false);
-    if (!requireLevel(interaction.member, 3)) {
+    if (!requireLevel(interaction.member, 3) && !isHeadStaff(interaction.member)) {
       return interaction.editReply({ content: '❌ Managers or higher only.' });
     }
     const staffUser = interaction.options.getUser('discord');
