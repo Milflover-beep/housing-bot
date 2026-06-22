@@ -59,6 +59,16 @@ module.exports = function coreCommands(ctx) {
     return false;
   }
 
+  function hasHeadStaffRole(member) {
+    const headStaffIds = parseRoleIdList('BOT_ROLE_HEAD_STAFF_ID');
+    return headStaffIds.length > 0 && headStaffIds.some((id) => hasRoleId(member, id));
+  }
+
+  function hasHeadPmRole(member) {
+    const headPmIds = parseRoleIdList('BOT_ROLE_HEAD_PM_ID');
+    return headPmIds.length > 0 && headPmIds.some((id) => hasRoleId(member, id));
+  }
+
   function isAllowedApplicationCategory(categoryId, rankType) {
     if (!categoryId) return false;
     if (CHECK_RENAME_CATEGORY_IDS.includes(categoryId)) return true;
@@ -1060,6 +1070,9 @@ module.exports = function coreCommands(ctx) {
   async function handleCheckcommands(interaction) {
     await defer(interaction, true);
     const lv = getMemberLevel(interaction.member);
+    const canUseStaffstats = lv >= 3 || hasHeadStaffRole(interaction.member);
+    const canManagePmRoster = lv >= 3 || hasHeadPmRole(interaction.member);
+    const canUsePmDebug = lv >= 2 || hasHeadPmRole(interaction.member);
     const lines = [];
     const add = (tier, cmds) => {
       lines.push(`**${tier}**\n${cmds.filter(Boolean).join('\n')}`);
@@ -1107,7 +1120,7 @@ module.exports = function coreCommands(ctx) {
         '`/punishmentcheck`',
         '`/totalhistory`',
         '`/removepunishment`',
-        '`/staffstats`',
+        canUseStaffstats ? '`/staffstats`' : null,
         '`/blacklist`',
         '`/removeblacklist`',
         '`/viewalts`',
@@ -1116,15 +1129,26 @@ module.exports = function coreCommands(ctx) {
         '`/reportcheck`',
         '`/removereport`',
         '`/clearcooldown`',
-        '`/addpm`',
-        '`/deletepm`',
-        '`/editpm`',
+        canManagePmRoster ? '`/addpm`' : null,
+        canManagePmRoster ? '`/deletepm`' : null,
+        canManagePmRoster ? '`/editpm`' : null,
         '`/deletescore`',
         '`/addalt`',
         '`/editalt`',
         '`/deletealt`',
         '`/clearalt`',
         '`/publictierlistupdate`',
+      ]);
+    }
+    if (canUseStaffstats && lv < 3) {
+      add('Head Staff', ['`/staffstats`']);
+    }
+    if (canManagePmRoster && lv < 3) {
+      add('Head PM', [
+        '`/addpm`',
+        '`/deletepm`',
+        '`/editpm`',
+        canUsePmDebug ? '`/pmstats debug:true`' : null,
       ]);
     }
     if (lv >= 4) {
