@@ -1097,6 +1097,14 @@ module.exports = function coreCommands(ctx) {
     if (lv >= 1) {
       add('PM+', ['`/pmstats`', '`/check`']);
     }
+    if (canManagePmRoster) {
+      add('Head PM', [
+        '`/addpm`',
+        '`/deletepm`',
+        '`/editpm`',
+        canUsePmDebug ? '`/pmstats debug:true`' : null,
+      ]);
+    }
     if (lv >= 2) {
       add('Staff+', [
         '`/deny`',
@@ -1109,6 +1117,9 @@ module.exports = function coreCommands(ctx) {
         '`/viewblacklists`',
         '`/activepunishments`',
       ]);
+    }
+    if (canUseStaffstats) {
+      add('Head Staff', ['`/staffstats`']);
     }
     if (lv >= 3) {
       add('Manager+', [
@@ -1138,17 +1149,6 @@ module.exports = function coreCommands(ctx) {
         '`/deletealt`',
         '`/clearalt`',
         '`/publictierlistupdate`',
-      ]);
-    }
-    if (canUseStaffstats && lv < 3) {
-      add('Head Staff', ['`/staffstats`']);
-    }
-    if (canManagePmRoster && lv < 3) {
-      add('Head PM', [
-        '`/addpm`',
-        '`/deletepm`',
-        '`/editpm`',
-        canUsePmDebug ? '`/pmstats debug:true`' : null,
       ]);
     }
     if (lv >= 4) {
