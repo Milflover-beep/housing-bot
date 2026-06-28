@@ -941,13 +941,11 @@ module.exports = function punishmentCommands(ctx) {
         content: `❌ Trial role \`${trialRoleId}\` was not found in this server.`,
       });
     }
-    if (trialRole.members.size === 0) {
-      await interaction.guild.members.fetch().catch(() => null);
-    }
     const trialMembers = Array.from(trialRole.members.values());
     if (!trialMembers.length) {
       return interaction.editReply({
-        content: 'No users currently have the Trial role.',
+        content:
+          'No cached members found for the Trial role. Make sure **Server Members Intent** is enabled and the bot is restarted.',
       });
     }
     const trialIds = trialMembers.map((m) => String(m.id));
@@ -1060,13 +1058,12 @@ module.exports = function punishmentCommands(ctx) {
     }
     if (current) pages.push(current);
     const rangeLine = start && end ? `Range: ${start} - ${end}` : 'Range: all time';
-    const summaryLine = `Messages sent: not tracked by bot database.`;
     const baseTitle = isWorstRanking ? '📉 Trial Staff Activity (lowest)' : '📊 Trial Staff Activity';
     const makeEmbed = (body, pageNum, totalPages) =>
       new EmbedBuilder()
         .setTitle(`${baseTitle} — ${pageNum}/${totalPages}`)
         .setColor(0x3498db)
-        .setDescription(`${rangeLine}\n${summaryLine}\n\n${body}`.slice(0, 4096))
+        .setDescription(`${rangeLine}\n\n${body}`.slice(0, 4096))
         .setTimestamp();
     await interaction.editReply({ embeds: [makeEmbed(pages[0] || '_No data._', 1, pages.length || 1)] });
     for (let i = 1; i < pages.length; i += 1) {
