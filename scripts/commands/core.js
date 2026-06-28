@@ -1071,7 +1071,6 @@ module.exports = function coreCommands(ctx) {
     await defer(interaction, true);
     const lv = getMemberLevel(interaction.member);
     const canUseStaffstats = lv >= 3 || hasHeadStaffRole(interaction.member);
-    const canUseTrialstats = lv >= 3 || hasHeadStaffRole(interaction.member);
     const canManagePmRoster = lv >= 3 || hasHeadPmRole(interaction.member);
     const canUsePmDebug = lv >= 2 || hasHeadPmRole(interaction.member);
     const lines = [];
@@ -1120,7 +1119,7 @@ module.exports = function coreCommands(ctx) {
       ]);
     }
     if (canUseStaffstats) {
-      add('Head Staff', ['`/staffstats`', canUseTrialstats ? '`/trialstats`' : null]);
+      add('Head Staff', ['`/staffstats`']);
     }
     if (lv >= 3) {
       add('Manager+', [
@@ -1133,7 +1132,6 @@ module.exports = function coreCommands(ctx) {
         '`/totalhistory`',
         '`/removepunishment`',
         canUseStaffstats ? '`/staffstats`' : null,
-        canUseTrialstats ? '`/trialstats`' : null,
         '`/blacklist`',
         '`/removeblacklist`',
         '`/viewalts`',
