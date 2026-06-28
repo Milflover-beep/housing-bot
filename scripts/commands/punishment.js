@@ -933,7 +933,7 @@ module.exports = function punishmentCommands(ctx) {
     const rangeStart = start && end ? new Date(start) : null;
     const rangeEnd = start && end ? new Date(end) : null;
     const trialRoleId = parseRoleIdList('BOT_ROLE_TRIAL_ID')[0] || DEFAULT_TRIAL_ROLE_ID;
-    const trialRole =
+    let trialRole =
       interaction.guild.roles.cache.get(trialRoleId) ||
       (await interaction.guild.roles.fetch(trialRoleId).catch(() => null));
     if (!trialRole) {
@@ -941,11 +941,18 @@ module.exports = function punishmentCommands(ctx) {
         content: `❌ Trial role \`${trialRoleId}\` was not found in this server.`,
       });
     }
-    const trialMembers = Array.from(trialRole.members.values());
+    let trialMembers = Array.from(trialRole.members.values());
+    if (!trialMembers.length) {
+      await interaction.guild.members.fetch().catch(() => null);
+      trialRole =
+        interaction.guild.roles.cache.get(trialRoleId) ||
+        (await interaction.guild.roles.fetch(trialRoleId).catch(() => null));
+      trialMembers = trialRole ? Array.from(trialRole.members.values()) : [];
+    }
     if (!trialMembers.length) {
       return interaction.editReply({
         content:
-          'No cached members found for the Trial role. Make sure **Server Members Intent** is enabled and the bot is restarted.',
+          'No Trial members found after cache warm-up. Confirm the role has members and **Server Members Intent** is enabled, then restart the bot.',
       });
     }
     const trialIds = trialMembers.map((m) => String(m.id));
