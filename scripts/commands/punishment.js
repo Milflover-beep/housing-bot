@@ -9,6 +9,7 @@ const {
 const { getPunishmentPingsChannelId } = require('../lib/punishmentExpiryPoller');
 
 const DEFAULT_STAFF_PING_ROLE_ID = '1299685590119223327';
+const DEFAULT_TRIAL_ROLE_ID = '1141836858683306025';
 
 module.exports = function punishmentCommands(ctx) {
   const {
@@ -917,6 +918,165 @@ module.exports = function punishmentCommands(ctx) {
     await interaction.editReply({ embeds: [embed] });
   }
 
+  async function handleTrialstats(interaction) {
+    await defer(interaction, false);
+    if (!requireLevel(interaction.member, 3) && !isHeadStaff(interaction.member)) {
+      return interaction.editReply({ content: '❌ Head Staff or higher only.' });
+    }
+    if (!interaction.guild) {
+      return interaction.editReply({ content: '❌ This command can only run in a server.' });
+    }
+    const start = interaction.options.getString('start-date');
+    const end = interaction.options.getString('end-date');
+    const ranking = interaction.options.getString('ranking') || 'best';
+    const isWorstRanking = ranking === 'worst';
+    const rangeStart = start && end ? new Date(start) : null;
+    const rangeEnd = start && end ? new Date(end) : null;
+    const trialRoleId = parseRoleIdList('BOT_ROLE_TRIAL_ID')[0] || DEFAULT_TRIAL_ROLE_ID;
+    const trialRole =
+      interaction.guild.roles.cache.get(trialRoleId) ||
+      (await interaction.guild.roles.fetch(trialRoleId).catch(() => null));
+    if (!trialRole) {
+      return interaction.editReply({
+        content: `❌ Trial role \`${trialRoleId}\` was not found in this server.`,
+      });
+    }
+    if (trialRole.members.size === 0) {
+      await interaction.guild.members.fetch().catch(() => null);
+    }
+    const trialMembers = Array.from(trialRole.members.values());
+    if (!trialMembers.length) {
+      return interaction.editReply({
+        content: 'No users currently have the Trial role.',
+      });
+    }
+    const trialIds = trialMembers.map((m) => String(m.id));
+    const ticketCategoryIds = String(process.env.CHECK_RENAME_CATEGORY_IDS || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const [activityRows, punishRows, blacklistRows, reportRows] = await Promise.all([
+      pool.query(
+        `SELECT
+           staff_discord_id AS staff_id,
+           COUNT(*)::int AS commands_run,
+           SUM(CASE WHEN category_id = ANY($3::text[]) THEN 1 ELSE 0 END)::int AS ticket_commands,
+           MAX(created_at) AS last_active_at
+         FROM staff_activity_logs
+         WHERE staff_discord_id = ANY($1::text[])
+           AND ($2::timestamptz IS NULL OR created_at >= $2)
+           AND ($4::timestamptz IS NULL OR created_at <= $4)
+         GROUP BY staff_discord_id`,
+        [trialIds, rangeStart, ticketCategoryIds, rangeEnd]
+      ),
+      pool.query(
+        `SELECT discord_user AS staff_id, COUNT(*)::int AS punishment_logs
+         FROM punishment_logs
+         WHERE discord_user = ANY($1::text[])
+           AND ($2::timestamptz IS NULL OR created_at >= $2)
+           AND ($3::timestamptz IS NULL OR created_at <= $3)
+         GROUP BY discord_user`,
+        [trialIds, rangeStart, rangeEnd]
+      ),
+      pool.query(
+        `SELECT discord_user_id AS staff_id, COUNT(*)::int AS blacklist_logs
+         FROM blacklists
+         WHERE discord_user_id = ANY($1::text[])
+           AND ($2::timestamptz IS NULL OR created_at >= $2)
+           AND ($3::timestamptz IS NULL OR created_at <= $3)
+         GROUP BY discord_user_id`,
+        [trialIds, rangeStart, rangeEnd]
+      ),
+      pool.query(
+        `SELECT discord_user_id AS staff_id, COUNT(*)::int AS reports_logged
+         FROM reports
+         WHERE discord_user_id = ANY($1::text[])
+           AND ($2::timestamptz IS NULL OR date_issued >= $2)
+           AND ($3::timestamptz IS NULL OR date_issued <= $3)
+         GROUP BY discord_user_id`,
+        [trialIds, rangeStart, rangeEnd]
+      ),
+    ]);
+    const activityById = new Map(activityRows.rows.map((r) => [String(r.staff_id), r]));
+    const punishById = new Map(punishRows.rows.map((r) => [String(r.staff_id), r]));
+    const blacklistsById = new Map(blacklistRows.rows.map((r) => [String(r.staff_id), r]));
+    const reportsById = new Map(reportRows.rows.map((r) => [String(r.staff_id), r]));
+    const scoreboard = trialMembers.map((member) => {
+      const id = String(member.id);
+      const activity = activityById.get(id) || {};
+      const punish = punishById.get(id) || {};
+      const bl = blacklistsById.get(id) || {};
+      const rep = reportsById.get(id) || {};
+      const commandsRun = Number(activity.commands_run || 0);
+      const ticketCommands = Number(activity.ticket_commands || 0);
+      const punishmentLogs = Number(punish.punishment_logs || 0);
+      const blacklistLogs = Number(bl.blacklist_logs || 0);
+      const reportsLogged = Number(rep.reports_logged || 0);
+      const totalLogs = punishmentLogs + blacklistLogs + reportsLogged;
+      const activityScore = commandsRun + totalLogs;
+      return {
+        id,
+        displayName: member.displayName || member.user?.username || id,
+        commandsRun,
+        ticketCommands,
+        punishmentLogs,
+        blacklistLogs,
+        reportsLogged,
+        totalLogs,
+        activityScore,
+        lastActiveAt: activity.last_active_at ? new Date(activity.last_active_at).getTime() : 0,
+      };
+    });
+    scoreboard.sort((a, b) => {
+      if (isWorstRanking) {
+        if (a.activityScore !== b.activityScore) return a.activityScore - b.activityScore;
+      } else if (a.activityScore !== b.activityScore) {
+        return b.activityScore - a.activityScore;
+      }
+      if (a.commandsRun !== b.commandsRun) return b.commandsRun - a.commandsRun;
+      return a.displayName.localeCompare(b.displayName);
+    });
+    const lines = scoreboard.map((row, idx) => {
+      const lastTs = row.lastActiveAt > 0 ? `<t:${Math.floor(row.lastActiveAt / 1000)}:R>` : 'never';
+      return (
+        `**#${idx + 1} ${row.displayName}**\n` +
+        `Commands: **${row.commandsRun}** | Ticket commands: **${row.ticketCommands}** | Logs: **${row.totalLogs}** ` +
+        `(Punish ${row.punishmentLogs}, Blacklist ${row.blacklistLogs}, Reports ${row.reportsLogged}) | Last active: ${lastTs}`
+      );
+    });
+    const pages = [];
+    let current = '';
+    for (const line of lines) {
+      const next = current ? `${current}\n\n${line}` : line;
+      if (next.length > 3600 && current) {
+        pages.push(current);
+        current = line;
+      } else if (next.length > 3600) {
+        pages.push(line.slice(0, 3600));
+        current = '';
+      } else {
+        current = next;
+      }
+    }
+    if (current) pages.push(current);
+    const rangeLine = start && end ? `Range: ${start} - ${end}` : 'Range: all time';
+    const summaryLine = `Messages sent: not tracked by bot database.`;
+    const baseTitle = isWorstRanking ? '📉 Trial Staff Activity (lowest)' : '📊 Trial Staff Activity';
+    const makeEmbed = (body, pageNum, totalPages) =>
+      new EmbedBuilder()
+        .setTitle(`${baseTitle} — ${pageNum}/${totalPages}`)
+        .setColor(0x3498db)
+        .setDescription(`${rangeLine}\n${summaryLine}\n\n${body}`.slice(0, 4096))
+        .setTimestamp();
+    await interaction.editReply({ embeds: [makeEmbed(pages[0] || '_No data._', 1, pages.length || 1)] });
+    for (let i = 1; i < pages.length; i += 1) {
+      await interaction.followUp({
+        embeds: [makeEmbed(pages[i], i + 1, pages.length)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  }
+
   async function handleHistory(interaction) {
     await defer(interaction, true);
     if (!requireLevel(interaction.member, 2)) {
@@ -1465,6 +1625,25 @@ module.exports = function punishmentCommands(ctx) {
           )
       ),
     new SlashCommandBuilder()
+      .setName('trialstats')
+      .setDescription('View activity stats for all Trial-role users (Head Staff+)')
+      .addStringOption((o) =>
+        o.setName('start-date').setDescription('ISO date start (optional)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o.setName('end-date').setDescription('ISO date end (optional)').setRequired(false)
+      )
+      .addStringOption((o) =>
+        o
+          .setName('ranking')
+          .setDescription('Order trial members by overall activity')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Most active', value: 'best' },
+            { name: 'Least active', value: 'worst' }
+          )
+      ),
+    new SlashCommandBuilder()
       .setName('history')
       .setDescription('View punishment and blacklist history for a player')
       .addStringOption((o) => o.setName('ign').setDescription('Minecraft IGN').setRequired(true)),
@@ -1505,6 +1684,7 @@ module.exports = function punishmentCommands(ctx) {
       log: handleLog,
       adminlog: handleAdminlog,
       staffstats: handleStaffstats,
+      trialstats: handleTrialstats,
       history: handleHistory,
       punishmentcheck: handleGetproof,
       totalhistory: handleTotalhistory,
